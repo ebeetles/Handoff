@@ -1,0 +1,13 @@
+node_modules/
+web/dist/
+web/public/library/*
+!web/public/library/.gitkeep
+pipeline/tracks/
+pipeline/overrides.json
+__pycache__/
+.pytest_cache/
+*.pyc
+.env
+.env.*
+.DS_Store
+.venv/

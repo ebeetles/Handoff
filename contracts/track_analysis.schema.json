@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "handoff/track_analysis/v1",
+  "title": "TrackAnalysis",
+  "description": "Per-track analysis written by pipeline/ and read by web/. Bump schema_version on any breaking change and update BOTH sides plus contracts/fixtures/.",
+  "type": "object",
+  "required": [
+    "schema_version", "id", "title", "artist", "source", "audio", "sample_rate",
+    "duration_s", "tempo", "beats", "beats_per_bar", "first_downbeat_index",
+    "downbeat_confidence", "bars", "phrase_bars", "phrases", "sections", "key",
+    "waveform", "meta"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "title": { "type": "string" },
+    "artist": { "type": "string" },
+    "source": {
+      "type": "object",
+      "required": ["filename", "license", "credit"],
+      "additionalProperties": false,
+      "properties": {
+        "filename": { "type": "string" },
+        "license": { "type": ["string", "null"] },
+        "credit": { "type": ["string", "null"] }
+      }
+    },
+    "audio": {
+      "type": "object",
+      "required": ["mix", "stems"],
+      "additionalProperties": false,
+      "properties": {
+        "mix": { "type": "string", "description": "Path relative to the track folder. Lossless (FLAC) so there is no encoder delay shifting the beat grid." },
+        "stems": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["drums", "bass", "vocals", "other"],
+              "additionalProperties": false,
+              "properties": {
+                "drums": { "type": "string" },
+                "bass": { "type": "string" },
+                "vocals": { "type": "string" },
+                "other": { "type": "string" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "sample_rate": { "type": "integer", "description": "Sample rate of the served audio files." },
+    "duration_s": { "type": "number", "exclusiveMinimum": 0 },
+    "tempo": {
+      "type": "object",
+      "required": ["bpm", "ibi_cv", "grid_residual_ratio", "beatmatchable", "grid"],
+      "additionalProperties": false,
+      "properties": {
+        "bpm": { "type": "number", "exclusiveMinimum": 0 },
+        "ibi_cv": { "type": "number", "minimum": 0, "description": "Coefficient of variation of raw inter-beat intervals: std(dt)/mean(dt)." },
+        "grid_residual_ratio": { "type": "number", "minimum": 0, "description": "RMS residual of a straight-line fit t_i = a + b*i, divided by the beat period b." },
+        "beatmatchable": { "type": "boolean" },
+        "grid": { "enum": ["regular", "tracked"], "description": "regular = beats replaced by the least-squares fitted grid; tracked = raw tracker output." }
+      }
+    },
+    "beats": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 8,
+      "description": "Beat times in seconds, strictly increasing."
+    },
+    "beats_per_bar": { "const": 4 },
+    "first_downbeat_index": { "type": "integer", "minimum": 0, "maximum": 3 },
+    "downbeat_confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "bars": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "beat_index", "start_s", "energy", "rms_db"],
+        "additionalProperties": false,
+        "properties": {
+          "index": { "type": "integer", "minimum": 0 },
+          "beat_index": { "type": "integer", "minimum": 0 },
+          "start_s": { "type": "number" },
+          "energy": {
+            "type": "object",
+            "required": ["low", "mid", "high"],
+            "additionalProperties": false,
+            "description": "Band energy normalized 0..1 within this track.",
+            "properties": {
+              "low": { "type": "number", "minimum": 0, "maximum": 1 },
+              "mid": { "type": "number", "minimum": 0, "maximum": 1 },
+              "high": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          },
+          "rms_db": { "type": "number", "description": "Absolute bar loudness in dBFS, comparable across tracks." }
+        }
+      }
+    },
+    "phrase_bars": { "type": "integer", "minimum": 1 },
+    "phrases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "start_bar", "n_bars", "start_s", "section_index"],
+        "additionalProperties": false,
+        "properties": {
+          "index": { "type": "integer", "minimum": 0 },
+          "start_bar": { "type": "integer", "minimum": 0 },
+          "n_bars": { "type": "integer", "minimum": 1 },
+          "start_s": { "type": "number" },
+          "section_index": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["index", "start_bar", "end_bar", "start_s", "label", "energy_level"],
+        "additionalProperties": false,
+        "properties": {
+          "index": { "type": "integer", "minimum": 0 },
+          "start_bar": { "type": "integer", "minimum": 0 },
+          "end_bar": { "type": "integer", "minimum": 1, "description": "Exclusive." },
+          "start_s": { "type": "number" },
+          "label": { "enum": ["intro", "main", "break", "outro"] },
+          "energy_level": { "enum": ["low", "mid", "high"] }
+        }
+      }
+    },
+    "key": {
+      "type": "object",
+      "required": ["name", "camelot", "confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "camelot": { "type": "string", "pattern": "^(1[0-2]|[1-9])[AB]$" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "waveform": { "type": "string", "description": "Path to waveform JSON relative to the track folder." },
+    "meta": {
+      "type": "object",
+      "required": ["pipeline_version", "generated_at", "overrides_applied"],
+      "additionalProperties": false,
+      "properties": {
+        "pipeline_version": { "type": "string" },
+        "generated_at": { "type": "string" },
+        "overrides_applied": { "type": "object" }
+      }
+    }
+  }
+}

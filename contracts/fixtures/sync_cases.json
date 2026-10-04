@@ -1,0 +1,13 @@
+{
+ "description": "Shared cases for chooseSync (web/src/audio/sync.ts). The Python port in Chunk 7 must pass the same cases. range = 0.08.",
+ "cases": [
+  {"my_bpm": 124, "other_bpm": 128, "expect": {"multiplier": 1, "rate": 1.032258}},
+  {"my_bpm": 128, "other_bpm": 124, "expect": {"multiplier": 1, "rate": 0.96875}},
+  {"my_bpm": 87, "other_bpm": 174, "expect": {"multiplier": 0.5, "rate": 1.0}},
+  {"my_bpm": 174, "other_bpm": 87, "expect": {"multiplier": 2, "rate": 1.0}},
+  {"my_bpm": 85, "other_bpm": 172, "expect": {"multiplier": 0.5, "rate": 1.011765}},
+  {"my_bpm": 100, "other_bpm": 140, "expect": null},
+  {"my_bpm": 120, "other_bpm": 129.6, "expect": {"multiplier": 1, "rate": 1.08}},
+  {"my_bpm": 120, "other_bpm": 130, "expect": null}
+ ]
+}
