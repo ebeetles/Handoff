@@ -40,6 +40,12 @@ def test_camelot_mapping():
     assert camelot(8, "minor") == "1A"    # G# minor
 
 
+def test_shared_fixture_matches_schema():
+    """contracts/fixtures/sample_analysis.json is what the web tests read; keep it current."""
+    fixture = json.loads((ROOT.parent / "contracts" / "fixtures" / "sample_analysis.json").read_text())
+    jsonschema.validate(fixture, load_schema())
+
+
 def test_schema_valid(library):
     _, results, _ = library
     schema = load_schema()
@@ -52,6 +58,7 @@ def test_bpm(library):
     for name, t in truth.items():
         assert abs(results[name]["tempo"]["bpm"] - t["bpm"]) < 0.1, name
         assert results[name]["tempo"]["beatmatchable"], name
+        assert results[name]["tempo"]["max_drift_ms"] < 5.0, name   # perfectly steady: only noise
 
 
 def test_downbeat_and_grid_phase(library):

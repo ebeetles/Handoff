@@ -3,12 +3,14 @@ import type { AudioEngine, DeckSnapshot } from "../audio/engine";
 import type { ControlId, ControlStore, DeckId } from "../control/controls";
 import type { CommandBus } from "../control/commands";
 import type { GestureController, TargetSpec } from "../input/gesture";
+import type { HandAdapter } from "../input/handAdapter";
 
 export interface Services {
   engine: AudioEngine;
   store: ControlStore;
   bus: CommandBus;
   gestures: GestureController;
+  hands: HandAdapter;
 }
 
 export const ServicesContext = createContext<Services | null>(null);

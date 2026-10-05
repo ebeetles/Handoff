@@ -10,10 +10,10 @@ function Channel({ deck, s }: { deck: DeckId; s: DeckSnapshot }) {
       <div className="channel-head">{deck}</div>
       <div className="channel-body">
         <div className="channel-knobs">
-          <Knob id={`${deck}.eqHigh`} label="High" bipolar size={54} />
-          <Knob id={`${deck}.eqMid`} label="Mid" bipolar size={54} />
-          <Knob id={`${deck}.eqLow`} label="Low" bipolar size={54} />
-          <Knob id={`${deck}.filter`} label="Filter" bipolar size={66} />
+          <Knob id={`${deck}.eqHigh`} label="High" bipolar size={60} />
+          <Knob id={`${deck}.eqMid`} label="Mid" bipolar size={60} />
+          <Knob id={`${deck}.eqLow`} label="Low" bipolar size={60} />
+          <Knob id={`${deck}.filter`} label="Filter" bipolar size={70} />
         </div>
         <div className="volume-row">
           <div className="meter" aria-hidden><div className="meter-fill" style={{ height: `${s.level * 100}%` }} /></div>

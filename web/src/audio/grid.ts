@@ -80,3 +80,16 @@ export class BeatGrid {
     return this.timeAtBar(Math.floor(this.barAt(t) + 1e-6) + 1);
   }
 }
+
+/** Where a loop of `beats` starting now should sit. With snap on, it starts on its own grid:
+ *  loops of a bar or more on the bar line, 1-3 beats on the beat, and rolls (under a beat)
+ *  on the current 1/2, 1/4, 1/8 ... of a beat, so the playhead is already inside the loop. */
+export function loopRange(g: BeatGrid, pos: number, beats: number, quantize: boolean): { start: number; end: number } {
+  let start = pos;
+  if (quantize) {
+    if (beats >= 4) start = g.floorTime(pos, "bar");
+    else if (beats >= 1) start = g.floorTime(pos, "beat");
+    else start = g.timeAtBeat(Math.floor(g.beatAt(pos) / beats + 1e-6) * beats);
+  }
+  return { start, end: g.timeAtBeat(g.beatAt(start) + beats) };
+}

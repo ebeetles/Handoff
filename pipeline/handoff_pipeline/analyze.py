@@ -14,9 +14,15 @@ WAVE_HOP = 220            # waveform hop: ~100 columns per second
 BEATS_PER_BAR = 4
 
 # Tunable thresholds. Calibrate these on real tracks and record changes in ROADMAP.md.
-BEATMATCHABLE_MAX_RESIDUAL_RATIO = 0.04   # RMS grid error / beat period
-PHASE_SEARCH_S = 0.050                    # +/- search window when refining grid phase
-PHASE_HOP, PHASE_NFFT = 64, 512           # high-res onset envelope for phase refinement
+BEATMATCHABLE_MAX_DRIFT_MS = 10.0         # worst per-segment offset of the global grid
+PHASE_HOP, PHASE_NFFT = 64, 512           # high-res onset envelope for grid fitting
+GRID_LOW_HZ = 150.0                       # kick band; the grid's phase comes from here
+GRID_FULL_WEIGHT = 0.25                   # full-band onsets help where there's no kick
+GRID_TEMPO_BAND = 0.04                    # +/- around the tracker tempo (its lags are 2.5% apart)
+GRID_COARSE_DRIFT_S = 0.004               # coarse period step = this much drift over the track
+GRID_FOLD_BINS = 240                      # phase bins per beat in the coarse search (~2 ms)
+DRIFT_SEGMENT_BEATS = 32                  # 8 bars per drift measurement
+DRIFT_MIN_SALIENCE = 1.6                  # kick-pulse max/mean below which a segment is skipped
 BAND_EDGES_HZ = (200.0, 2000.0)           # low < 200 <= mid < 2000 <= high
 
 PITCH_NAMES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
@@ -48,44 +54,132 @@ def _sample_env(env: np.ndarray, times: np.ndarray, sr: int, hop: int) -> np.nda
     return np.interp(times, frame_times, env, left=0.0, right=0.0)
 
 
+def grid_envelopes(y: np.ndarray, sr: int) -> tuple[np.ndarray, np.ndarray]:
+    """High-res (PHASE_HOP) onset envelopes for grid fitting, each scaled to mean 1.
+    Returns (kick, score): kick = low-band (< GRID_LOW_HZ) onsets only; score = kick +
+    GRID_FULL_WEIGHT * full-band onsets. Hats and claps are loud in the full band and sit
+    on offbeats, so the kick band has to dominate or the grid locks half a beat late.
+
+    The 512/64 window keeps the envelope peak ~4 ms after the true attack (it was 28 ms
+    with 2048). n_fft must be passed with S=: onset_strength otherwise centers as if
+    n_fft were 2048, which put the kick envelope 35 ms late."""
+    S = np.abs(librosa.stft(y, n_fft=PHASE_NFFT, hop_length=PHASE_HOP)) ** 2
+    freqs = librosa.fft_frequencies(sr=sr, n_fft=PHASE_NFFT)
+    kick = librosa.onset.onset_strength(S=librosa.power_to_db(S[freqs < GRID_LOW_HZ]), sr=sr,
+                                        hop_length=PHASE_HOP, n_fft=PHASE_NFFT)
+    full = librosa.onset.onset_strength(y=y, sr=sr, hop_length=PHASE_HOP, n_fft=PHASE_NFFT)
+    n = min(len(kick), len(full))
+    kick = kick[:n] / (kick[:n].mean() + 1e-9)
+    full = full[:n] / (full[:n].mean() + 1e-9)
+    return kick, kick + GRID_FULL_WEIGHT * full
+
+
+def _grid_times(a: float, b: float, duration_s: float) -> np.ndarray:
+    return a + b * np.arange(int(np.floor((duration_s - a) / b)) + 1)
+
+
+def fit_grid(env: np.ndarray, sr: int, duration_s: float, center_bpm: float) -> tuple[float, float]:
+    """Best constant grid t_i = a + b*i, found by maximizing S(a, b) = sum_i env(a + b*i)
+    directly. Never uses tracked beat indices: a tracker that slips half a beat gives the
+    wrong index to every beat after the slip, which biases a line fit (Frog Prince).
+
+    Coarse: for each period b in +/- GRID_TEMPO_BAND around center_bpm (stepped so one
+    step drifts GRID_COARSE_DRIFT_S over the track), fold env modulo b into phase bins;
+    the best bin is the best a for that b. Fine: evaluate S(a, b) exactly around the
+    coarse optimum at 0.1 ms phase resolution. Returns (a, b) with 0 <= a < b."""
+    frame_t = np.arange(len(env)) * PHASE_HOP / sr
+    b0 = 60.0 / center_bpm
+    step = GRID_COARSE_DRIFT_S / (duration_s / b0)
+    periods = np.arange(b0 / (1 + GRID_TEMPO_BAND), b0 / (1 - GRID_TEMPO_BAND), step)
+    smooth = np.array([0.25, 0.5, 0.25])
+    best = (-np.inf, 0.0, b0)
+    for b in periods:
+        bins = (np.mod(frame_t, b) * (GRID_FOLD_BINS / b)).astype(int) % GRID_FOLD_BINS
+        prof = np.bincount(bins, weights=env, minlength=GRID_FOLD_BINS)
+        prof = np.convolve(np.concatenate([prof[-1:], prof, prof[:1]]), smooth, mode="valid")
+        k = int(np.argmax(prof))
+        if prof[k] > best[0]:
+            best = (float(prof[k]), (k + 0.5) * b / GRID_FOLD_BINS, float(b))
+    _, a_c, b_c = best
+
+    fine_b = np.linspace(b_c - 2 * step, b_c + 2 * step, 41)
+    fine_a = a_c + np.arange(-0.005, 0.005 + 1e-9, 0.0001)
+    n = int(np.floor((duration_s - a_c) / b_c))
+    i = np.arange(n)
+    scores = np.empty((len(fine_b), len(fine_a)))
+    for r, b in enumerate(fine_b):
+        t = fine_a[:, None] + b * i[None, :]
+        scores[r] = _sample_env(env, t.ravel(), sr, PHASE_HOP).reshape(t.shape).sum(axis=1)
+    r, c = np.unravel_index(int(np.argmax(scores)), scores.shape)
+    b = float(fine_b[r])
+    return float(np.mod(fine_a[c], b)), b
+
+
+def grid_drift(kick: np.ndarray, score: np.ndarray, sr: int, a: float, b: float,
+               duration_s: float) -> list[dict]:
+    """How far the global grid is from the music, segment by segment.
+
+    For each DRIFT_SEGMENT_BEATS-beat segment, profile(o) = mean over its grid beats of
+    env(t + o), for o across one whole beat. A segment is measured only if it has an
+    on-beat kick: the kick profile peaks within a quarter beat of the grid, and its
+    salience (max/mean) is >= DRIFT_MIN_SALIENCE. Segments without one (pad breakdowns;
+    intros where the only low-end is offbeat bass, as in Zute) can't confirm or refute
+    the grid, so they're skipped. The offset is then the argmax of the score profile within
+    a quarter beat. It uses the envelope the grid was fitted to, so constant envelope
+    latency cancels, and the quarter-beat limit keeps offbeat hats from winning.
+    Returns [{start_s, offset_ms (None if skipped), salience}]."""
+    beats = _grid_times(a, b, duration_s)
+    offsets = np.arange(-0.5 * b, 0.5 * b, 0.0005)
+    near = np.abs(offsets) <= 0.25 * b
+    edge_bins = int(0.010 / 0.0005)
+    out = []
+    for s in range(0, len(beats), DRIFT_SEGMENT_BEATS):
+        seg = beats[s:s + DRIFT_SEGMENT_BEATS]
+        if len(seg) < DRIFT_SEGMENT_BEATS // 2:
+            break
+        t = (seg[None, :] + offsets[:, None]).ravel()
+        k_prof = _sample_env(kick, t, sr, PHASE_HOP).reshape(len(offsets), -1).mean(axis=1)
+        s_prof = _sample_env(score, t, sr, PHASE_HOP).reshape(len(offsets), -1).mean(axis=1)
+        k_near = k_prof[near]
+        k = int(np.argmax(k_near))
+        salience = float(k_near[k] / (k_prof.mean() + 1e-9))
+        interior = edge_bins <= k < len(k_near) - edge_bins   # a peak, not the shoulder of an offbeat bump
+        off = (float(offsets[near][int(np.argmax(s_prof[near]))] * 1000)
+               if interior and salience >= DRIFT_MIN_SALIENCE else None)
+        out.append({"start_s": float(seg[0]), "offset_ms": off, "salience": salience})
+    return out
+
+
 def track_beats(y: np.ndarray, sr: int, duration_s: float, bpm_hint: float | None = None,
                 force_grid: str | None = None) -> dict:
-    """Beat-track, then (if tempo is steady) replace the jittery tracked beats with a
-    least-squares straight-line grid t_i = a + b*i, refine its phase, and extend it
-    over the whole track.
+    """Fit a constant beat grid to the whole track (fit_grid), measure how far the music
+    drifts from it (grid_drift), and keep the grid if the worst drift is under
+    BEATMATCHABLE_MAX_DRIFT_MS. Otherwise fall back to the raw tracked beats.
 
-    Why: the tracker quantizes to HOP (23 ms) and jitters; for constant-tempo music the
-    fitted line is more accurate than any single tracked beat.
+    The tracker only supplies the tempo the grid search is centered on (bpm_hint
+    overrides it) and the fallback beats. Its tempo comes from integer-frame lags at HOP,
+    so it is quantized to ~2.5% steps (123.05 / 129.20 near 125 BPM).
     """
     env = _onset_envelope(y, sr)
-    _, frames = librosa.beat.beat_track(onset_envelope=env, sr=sr, hop_length=HOP,
-                                        start_bpm=bpm_hint or 120.0, units="frames")
+    tempo, frames = librosa.beat.beat_track(onset_envelope=env, sr=sr, hop_length=HOP,
+                                            start_bpm=bpm_hint or 120.0, units="frames")
     raw = librosa.frames_to_time(np.asarray(frames), sr=sr, hop_length=HOP)
     if len(raw) < 8:
         raise ValueError(f"beat tracker found only {len(raw)} beats; is this track mostly silent?")
-
-    idx = np.arange(len(raw))
-    b, a = np.polyfit(idx, raw, 1)                 # b = beat period (s), a = phase (s)
-    residual = raw - (a + b * idx)
-    residual_ratio = float(np.sqrt(np.mean(residual ** 2)) / b)
     ibi = np.diff(raw)
     ibi_cv = float(np.std(ibi) / np.mean(ibi))
-    beatmatchable = residual_ratio < BEATMATCHABLE_MAX_RESIDUAL_RATIO
+
+    kick, score = grid_envelopes(y, sr)
+    a, b = fit_grid(score, sr, duration_s, bpm_hint or float(np.atleast_1d(tempo)[0]))
+    segments = grid_drift(kick, score, sr, a, b, duration_s)
+    measured = [abs(s["offset_ms"]) for s in segments if s["offset_ms"] is not None]
+    max_drift_ms = max(measured) if measured else None
+    beatmatchable = max_drift_ms is not None and max_drift_ms <= BEATMATCHABLE_MAX_DRIFT_MS
 
     use_regular = beatmatchable if force_grid is None else force_grid == "regular"
     if use_regular:
-        # Phase refinement: slide the grid +/- PHASE_SEARCH_S and keep the offset that
-        # maximizes total onset strength sampled at grid times. Uses a high-resolution
-        # envelope: with the 2048-sample window the peak lags the true attack by ~28 ms;
-        # with 512/64 the lag measured on the demo tracks is ~4.5 ms (inaudible).
-        hires = librosa.onset.onset_strength(y=y, sr=sr, hop_length=PHASE_HOP, n_fft=PHASE_NFFT)
-        i_all = np.arange(np.ceil(-a / b), np.floor((duration_s - a) / b) + 1)
-        offsets = np.arange(-PHASE_SEARCH_S, PHASE_SEARCH_S + 1e-9, 0.0005)
-        scores = [np.sum(_sample_env(hires, a + d + b * i_all, sr, PHASE_HOP)) for d in offsets]
-        a = a + offsets[int(np.argmax(scores))]
-        i_all = np.arange(np.ceil(-a / b), np.floor((duration_s - a) / b) + 1)
-        beats = a + b * i_all
-        beats = beats[(beats >= 0) & (beats < duration_s)]
+        beats = _grid_times(a, b, duration_s)
+        beats = beats[beats < duration_s]
         grid = "regular"
     else:
         beats = raw
@@ -95,7 +189,8 @@ def track_beats(y: np.ndarray, sr: int, duration_s: float, bpm_hint: float | Non
         "beats": beats.astype(float),
         "bpm": float(60.0 / b),
         "ibi_cv": ibi_cv,
-        "grid_residual_ratio": residual_ratio,
+        "max_drift_ms": max_drift_ms,
+        "drift_segments": segments,
         "beatmatchable": bool(beatmatchable),
         "grid": grid,
         "onset_env": env,

@@ -22,7 +22,7 @@ from . import analyze as A
 from .audio_io import (SERVE_SR, copy_provided_stems, file_hash, find_provided_stems, guess_title_artist,
                        separate_stems, slugify, to_flac)
 
-PIPELINE_VERSION = "0.1.0"
+PIPELINE_VERSION = "0.2.0"
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "contracts" / "track_analysis.schema.json"
 DEFAULT_PHRASE_BARS = 16
 
@@ -81,7 +81,7 @@ def process_track(src: Path, out_root: Path, overrides: dict, with_stems: bool, 
 
     title, artist = guess_title_artist(src)
     analysis = {
-        "schema_version": 1,
+        "schema_version": 2,
         "id": tid,
         "title": overrides.get("title", title),
         "artist": overrides.get("artist", artist),
@@ -92,7 +92,7 @@ def process_track(src: Path, out_root: Path, overrides: dict, with_stems: bool, 
         "tempo": {
             "bpm": round(beat["bpm"], 3),
             "ibi_cv": round(beat["ibi_cv"], 4),
-            "grid_residual_ratio": round(beat["grid_residual_ratio"], 4),
+            "max_drift_ms": None if beat["max_drift_ms"] is None else round(beat["max_drift_ms"], 1),
             "beatmatchable": beat["beatmatchable"],
             "grid": beat["grid"],
         },
@@ -117,7 +117,8 @@ def process_track(src: Path, out_root: Path, overrides: dict, with_stems: bool, 
 
     (tdir / "waveform.json").write_text(json.dumps(wave, separators=(",", ":")))
     analysis_path.write_text(json.dumps(analysis, indent=1))
-    log(f"  done    {analysis['tempo']['bpm']:.2f} BPM ({beat['grid']} grid, "
+    drift = "n/a" if beat["max_drift_ms"] is None else f"{beat['max_drift_ms']:.1f} ms"
+    log(f"  done    {analysis['tempo']['bpm']:.2f} BPM ({beat['grid']} grid, drift {drift}, "
         f"beatmatchable={beat['beatmatchable']}), key {key['camelot']}, "
         f"downbeat conf {db_conf:.2f}, {len(sections)} sections, stems={'yes' if stems else 'no'}")
     return analysis

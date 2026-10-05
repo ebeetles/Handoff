@@ -30,6 +30,8 @@ const SMOOTH_TC = 0.012; // time constant for knob smoothing (setTargetAtTime)
 export class Deck {
   track: LoadedTrack | null = null;
   anchor: Anchor = stoppedAt(0);
+  /** During a roll: where the playhead would be without it (follows rate changes). */
+  slip: Anchor | null = null;
   cuePos = 0;
   synced = false;
   loading: string | null = null;
@@ -105,6 +107,7 @@ export class Deck {
 
   unload(): void {
     this.hardStop();
+    this.slip = null;
     this.track = null; // drop buffer references so GC can reclaim (stems are large)
   }
 
@@ -149,6 +152,7 @@ export class Deck {
 
   pause(): void {
     if (!this.anchor.playing) return;
+    this.slip = null;
     const now = this.now;
     const g = this.declick.gain;
     g.cancelScheduledValues(now);
@@ -159,7 +163,10 @@ export class Deck {
     this.anchor = { ...this.anchor, playing: false, pos };
   }
 
-  seek(pos: number): void {
+  /** Be at `pos` as of AudioContext time `at` (default: now). Pass the `at` you computed
+   *  `pos` from: currentTime can step a render quantum (2.9 ms) between two reads in one task,
+   *  which left jumps and roll exits ~3 ms out of phase under load (browser smoke test). */
+  seek(pos: number, at = this.now): void {
     if (!this.track) return;
     pos = Math.min(Math.max(0, pos), this.track.analysis.duration_s - 0.05);
     const loop = this.anchor.loop && pos >= this.anchor.loop.start && pos < this.anchor.loop.end ? this.anchor.loop : null;
@@ -169,10 +176,10 @@ export class Deck {
     }
     const now = this.now;
     const t1 = now + DECLICK_S;
-    // "seek(pos)" means "be at pos NOW". The new sources only start after the fade-out,
-    // at t1, so start them DECLICK_S * rate further in. Without this, every seek (and so
-    // every sync) landed 6 ms late; measured in the browser test before this fix.
-    const startPos = pos + DECLICK_S * this.anchor.rate;
+    // "seek(pos)" means "be at pos NOW" (or at `at`). The new sources only start after the
+    // fade-out, at t1, so start them (t1 - at) * rate further in. Without this, every seek
+    // (and so every sync) landed 6 ms late; measured in the browser test before this fix.
+    const startPos = pos + (t1 - at) * this.anchor.rate;
     const g = this.declick.gain;
     g.cancelScheduledValues(now);
     g.setValueAtTime(g.value, now);
@@ -185,6 +192,7 @@ export class Deck {
 
   setRate(rate: number): void {
     this.anchor = reanchor(this.anchor, this.now, { rate });
+    if (this.slip) this.slip = reanchor(this.slip, this.now, { rate });
     const at = Math.max(this.now, this.anchor.ctxTime);
     this.sources.forEach((s) => s.playbackRate.setValueAtTime(rate, at));
   }

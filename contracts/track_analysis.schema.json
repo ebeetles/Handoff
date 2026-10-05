@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "handoff/track_analysis/v1",
+  "$id": "handoff/track_analysis/v2",
   "title": "TrackAnalysis",
   "description": "Per-track analysis written by pipeline/ and read by web/. Bump schema_version on any breaking change and update BOTH sides plus contracts/fixtures/.",
   "type": "object",
@@ -12,7 +12,7 @@
   ],
   "additionalProperties": false,
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": { "const": 2 },
     "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
     "title": { "type": "string" },
     "artist": { "type": "string" },
@@ -54,14 +54,14 @@
     "duration_s": { "type": "number", "exclusiveMinimum": 0 },
     "tempo": {
       "type": "object",
-      "required": ["bpm", "ibi_cv", "grid_residual_ratio", "beatmatchable", "grid"],
+      "required": ["bpm", "ibi_cv", "max_drift_ms", "beatmatchable", "grid"],
       "additionalProperties": false,
       "properties": {
-        "bpm": { "type": "number", "exclusiveMinimum": 0 },
-        "ibi_cv": { "type": "number", "minimum": 0, "description": "Coefficient of variation of raw inter-beat intervals: std(dt)/mean(dt)." },
-        "grid_residual_ratio": { "type": "number", "minimum": 0, "description": "RMS residual of a straight-line fit t_i = a + b*i, divided by the beat period b." },
-        "beatmatchable": { "type": "boolean" },
-        "grid": { "enum": ["regular", "tracked"], "description": "regular = beats replaced by the least-squares fitted grid; tracked = raw tracker output." }
+        "bpm": { "type": "number", "exclusiveMinimum": 0, "description": "60 / b for the best constant grid t_i = a + b*i over the whole track." },
+        "ibi_cv": { "type": "number", "minimum": 0, "description": "Coefficient of variation of the raw beat tracker's inter-beat intervals: std(dt)/mean(dt). Informational only." },
+        "max_drift_ms": { "type": ["number", "null"], "minimum": 0, "description": "Largest |offset| between the constant grid and the kick, over 8-bar segments that have an on-beat kick. null if no segment has one." },
+        "beatmatchable": { "type": "boolean", "description": "max_drift_ms is not null and <= 10 ms: the constant grid holds the kick across the track." },
+        "grid": { "enum": ["regular", "tracked"], "description": "regular = beats are the constant grid; tracked = raw tracker output (used when not beatmatchable)." }
       }
     },
     "beats": {

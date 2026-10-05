@@ -18,7 +18,8 @@ function arc(cx: number, cy: number, r: number, a0: number, a1: number): string 
 
 export function Knob({ id, label, size = 66, bipolar = false }: { id: ControlId; label: string; size?: number; bipolar?: boolean }) {
   const v = useControl(id);
-  const ref = useHitTarget<HTMLDivElement>({ kind: "continuous", control: id, axis: "y" });
+  // Mouse: drag vertically. Hand: pinch and twist.
+  const ref = useHitTarget<HTMLDivElement>({ kind: "continuous", control: id, axis: "y", twist: true });
   const c = size / 2, r = size / 2 - 7;
   const aV = START + v * SWEEP;
   const aFrom = bipolar ? START + 0.5 * SWEEP : START;
@@ -64,11 +65,11 @@ export function Crossfader() {
   );
 }
 
-export function Pad({ command, children, active, pending, disabled, small }: {
-  command: Command; children: ReactNode; active?: boolean; pending?: boolean; disabled?: boolean; small?: boolean;
+export function Pad({ command, children, active, pending, disabled, small, wide }: {
+  command: Command; children: ReactNode; active?: boolean; pending?: boolean; disabled?: boolean; small?: boolean; wide?: boolean;
 }) {
   const ref = useHitTarget<HTMLDivElement>({ kind: "pad", command });
-  const cls = ["pad", small && "small", active && "active", pending && "pending", disabled && "disabled"].filter(Boolean).join(" ");
+  const cls = ["pad", small && "small", wide && "wide", active && "active", pending && "pending", disabled && "disabled"].filter(Boolean).join(" ");
   return <div className={cls} ref={ref} role="button" aria-pressed={active}>{children}</div>;
 }
 

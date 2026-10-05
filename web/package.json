@@ -4,14 +4,18 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/fetch-hand-model.mjs --soft",
     "dev": "vite",
+    "prebuild": "node scripts/fetch-hand-model.mjs --soft",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "fetch-hand-model": "node scripts/fetch-hand-model.mjs"
   },
   "dependencies": {
     "@fontsource/barlow": "^5.3.0",
     "@fontsource/barlow-condensed": "^5.3.0",
+    "@mediapipe/tasks-vision": "^1.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

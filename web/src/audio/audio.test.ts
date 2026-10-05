@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fixture from "../../../contracts/fixtures/sample_analysis.json";
 import { assertTrackAnalysis } from "../contracts/track";
-import { BeatGrid } from "./grid";
+import { BeatGrid, loopRange } from "./grid";
 import { ctxTimeAt, positionAt, reanchor, type Anchor } from "./transport";
 import { alignedLaunchBar, barPhaseDelta, chooseSync, frac } from "./sync";
 import { eqDb, filterParams, rateToTempo, tempoRate, xfadeGains } from "./mapping";
@@ -13,7 +13,7 @@ describe("contract", () => {
     expect(() => assertTrackAnalysis(fixture)).not.toThrow();
   });
   it("rejects a wrong schema version", () => {
-    expect(() => assertTrackAnalysis({ ...fixture, schema_version: 2 })).toThrow(/schema_version/);
+    expect(() => assertTrackAnalysis({ ...fixture, schema_version: 1 })).toThrow(/schema_version/);
   });
 });
 
@@ -40,6 +40,28 @@ describe("BeatGrid", () => {
     const fg = new BeatGrid(a.beats, a.first_downbeat_index);
     close(fg.bpmAt(30), a.tempo.bpm, 0.01);
     close(fg.barAt(fg.timeAtBar(17)), 17);
+  });
+});
+
+describe("loopRange", () => {
+  const g = new BeatGrid([1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5], 1); // 120 BPM, bars start at 1.5, 3.5
+  it("bar-length loops start on the bar, 1-3 beats on the beat", () => {
+    const four = loopRange(g, 2.7, 4, true);
+    close(four.start, 1.5); close(four.end, 3.5);
+    const one = loopRange(g, 2.7, 1, true);
+    close(one.start, 2.5); close(one.end, 3);
+  });
+  it("rolls start on their own grid, with the playhead already inside", () => {
+    for (const [beats, start] of [[0.5, 2.5], [0.25, 2.625], [0.125, 2.6875], [0.0625, 2.6875]] as const) {
+      const r = loopRange(g, 2.7, beats, true);
+      close(r.start, start);
+      close(r.end - r.start, beats * 0.5);
+      expect(r.start <= 2.7 && 2.7 < r.end).toBe(true);
+    }
+  });
+  it("snap off: starts where the playhead is", () => {
+    const r = loopRange(g, 2.7, 0.25, false);
+    close(r.start, 2.7); close(r.end, 2.825);
   });
 });
 

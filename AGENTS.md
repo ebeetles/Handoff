@@ -29,7 +29,7 @@ The smoke test needs a library with two beatmatchable tracks. The demo tracks wo
 
 - **One clock.** Schedule every audio event in `AudioContext.currentTime`. Never use `setTimeout`/`setInterval` to *trigger* sound. Timers may only drive a lookahead scheduler that schedules ahead on the audio clock.
 - **Re-anchor before changing transport state.** Deck position is `pos + (now − ctxTime) · rate`. Any change to rate, loop, or position must go through `reanchor()` (or `seek()`), or the playhead jumps.
-- **`seek(pos)` means "be at pos now."** It already compensates for the declick fade. Don't add your own offsets.
+- **`seek(pos)` means "be at pos now."** It already compensates for the declick fade. Don't add your own offsets. If you computed `pos` from a clock read, pass it: `seek(pos, at)`. `currentTime` can step a render quantum (2.9 ms) between two reads in one task.
 - **Discontinuities fade.** Stopping or starting sources mid-signal clicks. Use the deck's declick path.
 - **Analyze what you serve.** The pipeline analyzes the exact FLAC the browser plays. Never serve MP3/AAC/Opus without measuring the decode offset against the beat grid.
 - **Beats, bars, phrases come from the grid** (`BeatGrid`), never from `60 / bpm` arithmetic. Real tracks aren't perfectly uniform.

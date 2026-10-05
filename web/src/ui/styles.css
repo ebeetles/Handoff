@@ -40,6 +40,7 @@ button { font: inherit; color: inherit; }
 .wordmark span { color: var(--dim); font-weight: 500; font-size: 15px; margin-left: 10px; }
 .notice { font-family: var(--font-hw); font-size: 17px; color: var(--hot); min-height: 1.4em; text-align: center; }
 .topbar-right { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+.topbar-right .knob { grid-auto-flow: column; align-items: center; gap: 6px; padding: 0 4px; }
 .text-button {
   background: var(--panel); border: 1px solid var(--rule); border-radius: 999px;
   padding: 8px 16px; cursor: pointer; font-family: var(--font-hw); font-size: 16px; font-weight: 600;
@@ -49,7 +50,7 @@ button { font: inherit; color: inherit; }
 /* ---------- waveforms */
 .waves { display: grid; gap: 4px; }
 .wave {
-  position: relative; height: 84px; border-radius: 12px; overflow: hidden;
+  position: relative; height: 66px; border-radius: 12px; overflow: hidden;
   background: rgba(10, 8, 30, 0.55); border: 1px solid var(--rule);
 }
 .wave canvas { width: 100%; height: 100%; display: block; }
@@ -61,7 +62,7 @@ button { font: inherit; color: inherit; }
 
 /* ---------- board */
 .board {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 0.62fr) minmax(0, 1fr);
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(max-content, 0.62fr) minmax(0, 1fr);
   gap: 12px; min-height: 0; touch-action: none; user-select: none;
 }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius-panel); padding: 14px; }
@@ -82,15 +83,22 @@ button { font: inherit; color: inherit; }
 .status-line { margin-top: 6px; font-size: 13px; color: var(--dim); min-height: 1.3em; }
 .status-line.error { color: var(--hot); }
 
-.overview { position: relative; height: 46px; border-radius: 10px; overflow: hidden; background: rgba(10, 8, 30, 0.55); border: 1px solid var(--rule); cursor: pointer; }
+.overview { position: relative; height: 36px; border-radius: 10px; overflow: hidden; background: rgba(10, 8, 30, 0.55); border: 1px solid var(--rule); cursor: pointer; }
 .overview canvas { width: 100%; height: 100%; display: block; }
 
-.deck-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; min-height: 0; }
-.deck-b .deck-controls { grid-template-columns: auto minmax(0, 1fr); }
-.deck-b .deck-controls .tempo-col { order: -1; }
+/* Tempo fader on the outer edge (A: left, B: right), off the hand's path to the mixer. */
+.deck-controls { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; min-height: 0; }
+.deck-controls .tempo-col { order: -1; }
+.deck-b .deck-controls { grid-template-columns: minmax(0, 1fr) auto; }
+.deck-b .deck-controls .tempo-col { order: 1; }
 .pad-area { display: grid; gap: 10px; align-content: start; }
-.pad-row { display: grid; gap: 8px; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); }
-.pad-group-label { font-family: var(--font-hw); font-size: 14px; color: var(--dim); margin: 2px 0 -4px; }
+.pad-row { display: grid; gap: 14px; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); }
+.pad.wide { grid-column: span 2; }
+/* Deck B mirrors A: Sync and the jumps toward the mixer, Cue on the outer edge. */
+.deck-b .transport-row { direction: rtl; }
+.deck-b .transport-row > * { direction: ltr; }
+.deck-b .cue-row > :first-child { order: 1; }
+.pad-group-label { font-family: var(--font-hw); font-size: 13px; color: var(--dim); margin: 0 0 -6px; }
 
 /* ---------- pads */
 .pad {
@@ -112,11 +120,11 @@ button { font: inherit; color: inherit; }
 .stem.off { color: var(--faint); }
 
 /* ---------- phrase ring */
-.phrase { width: 150px; height: 150px; position: relative; flex: none; }
+.phrase { width: 116px; height: 116px; position: relative; flex: none; }
 .phrase svg { width: 100%; height: 100%; display: block; }
 .phrase-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
-.phrase-count { font-family: var(--font-hw); font-weight: 700; font-size: 46px; line-height: 0.95; font-variant-numeric: tabular-nums; }
-.phrase-caption { font-size: 12px; color: var(--dim); line-height: 1.2; max-width: 84px; }
+.phrase-count { font-family: var(--font-hw); font-weight: 700; font-size: 38px; line-height: 0.95; font-variant-numeric: tabular-nums; }
+.phrase-caption { font-size: 11px; color: var(--dim); line-height: 1.15; max-width: 70px; }
 
 /* ---------- knobs and faders */
 .knob { display: grid; justify-items: center; gap: 4px; cursor: ns-resize; padding: 4px; border-radius: var(--radius-control); }
@@ -151,7 +159,7 @@ button { font: inherit; color: inherit; }
 .channel-body { display: grid; grid-template-columns: auto auto; justify-content: center; gap: 6px; min-height: 0; }
 .deck-b .channel-body { direction: rtl; }          /* mirror: both volume faders meet in the middle, like a standard mixer */
 .deck-b .channel-body > * { direction: ltr; }
-.channel-knobs { display: grid; align-content: start; justify-items: center; gap: 0; }
+.channel-knobs { display: grid; align-content: space-evenly; justify-items: center; gap: 6px; }
 .volume-row { display: grid; grid-template-columns: auto auto; gap: 6px; align-items: stretch; min-height: 0; }
 .volume-row .fader { min-height: 0; }
 .volume-row .fader-track { min-height: 120px; }
@@ -196,3 +204,46 @@ button { font: inherit; color: inherit; }
   .pad.pending { animation: none; outline: 2px dashed var(--deck); }
   .pad { transition: none; }
 }
+
+/* ---------- camera / hands (Chunk 5) */
+.hand-panel {
+  position: fixed; right: 16px; bottom: 16px; width: 240px; z-index: 15;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; padding: 8px;
+  font-family: var(--font-hw); font-size: 14px;
+}
+.hand-panel[hidden] { display: none; }
+.hand-preview { position: relative; aspect-ratio: 4 / 3; border-radius: 8px; overflow: hidden; background: #000; }
+.hand-preview-video, .hand-preview-overlay {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  transform: scaleX(-1); /* selfie view: your right hand on the right */
+}
+.hand-status { margin-top: 6px; color: var(--dim); }
+.hand-status.error { color: var(--hot); }
+.hand-stats { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 6px 0 0; color: var(--dim); }
+.hand-stats dt { color: var(--ink); }
+.hand-stats dd { margin: 0; font-variant-numeric: tabular-nums; }
+.hand-record { margin-top: 6px; width: 100%; padding: 5px 10px; font-size: 14px; }
+/* Knob lock-on: a hand near a knob locks to it; the knob is outlined and the cursor sits on it. */
+.knob[data-locked="true"] { outline: 2px solid var(--dim); outline-offset: 2px; }
+.knob[data-locked="true"][data-grabbed="true"] { outline-color: var(--ink); }
+.hand-cursor.locked { width: 40px; height: 40px; margin: -20px 0 0 -20px; background: rgba(238, 234, 253, 0.12); }
+.hand-cursor.locked.down { background: rgba(238, 234, 253, 0.4); transform: none; }
+
+/* Short screens (laptops at 800 px): shrink display, not hand targets (pads stay >= 50 px). */
+@media (max-height: 860px) {
+  .app { gap: 8px; padding: 10px 14px 12px; }
+  .wave { height: 50px; }
+  .phrase { width: 92px; height: 92px; }
+  .phrase-count { font-size: 30px; }
+  .phrase-caption { display: none; }
+  .readout-big { font-size: 32px; }
+  .status-line { display: none; }
+  .deck { gap: 8px; }
+  .pad { min-height: 52px; }
+  .pad.small { min-height: 44px; }
+  .stem { min-height: 52px; }
+  .pad-area { gap: 8px; }
+}
+.hand-pinch { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 6px; margin-top: 6px; color: var(--ink); }
+.hand-pinch small { color: var(--dim); font-size: 12px; }
+.hand-pinch input { width: 100%; accent-color: var(--ink); }

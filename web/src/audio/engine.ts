@@ -6,10 +6,10 @@ import type { Command } from "../control/commands";
 import { CommandBus } from "../control/commands";
 import { ControlStore, DECKS, deckControl, type ControlId, type ControlSource, type DeckId } from "../control/controls";
 import { Deck, type LoadedTrack, type SourceKey } from "./deck";
-import { BeatGrid } from "./grid";
+import { BeatGrid, loopRange } from "./grid";
 import { masterGain, rateToTempo, tempoRate, xfadeGains } from "./mapping";
 import { alignedLaunchBar, barPhaseDelta, chooseSync, frac } from "./sync";
-import { ctxTimeAt } from "./transport";
+import { ctxTimeAt, positionAt, reanchor } from "./transport";
 
 export interface DeckSnapshot {
   loaded: boolean;
@@ -204,49 +204,65 @@ export class AudioEngine {
     me.synced = true;
     if (me.playing && !me.pending && other.playing && !other.pending) {
       const g = me.track.grid;
-      const myBar = g.barAt(me.position());
-      const delta = barPhaseDelta(myBar, other.track.grid.barAt(other.position()), choice.multiplier);
+      const at = this.ctx.currentTime;   // one clock read for both decks and the seek
+      const myBar = g.barAt(me.position(at));
+      const delta = barPhaseDelta(myBar, other.track.grid.barAt(other.position(at)), choice.multiplier);
       if (Math.abs(delta) > 1e-3) {
+        me.slip = null;
         me.setLoop(null);
-        me.seek(g.timeAtBar(myBar + delta));
+        me.seek(g.timeAtBar(myBar + delta), at);
       }
     }
   }
 
   private loop(deck: Deck, beats: number): void {
     if (!deck.track) return;
-    if (deck.anchor.loop?.beats === beats) return deck.setLoop(null);
-    const g = deck.track.grid;
-    const pos = deck.position();
-    // Snap: loops of a bar or longer start on the bar line, shorter ones on the beat.
-    const start = this.quantize ? g.floorTime(pos, beats >= 4 ? "bar" : "beat") : pos;
-    const end = g.timeAtBeat(g.beatAt(start) + beats);
+    if (deck.anchor.loop?.beats === beats) return this.exitLoop(deck);
+    const { start, end } = loopRange(deck.track.grid, deck.position(), beats, this.quantize);
     if (end > deck.track.analysis.duration_s) return this.say("Not enough track left for that loop.");
+    // A roll (under a beat) slips: keep a clock of where playback would be without it, so
+    // leaving the roll lands back in time. A fractional loop otherwise exits off the beat
+    // (it advances a fraction of a beat per pass), which breaks sync with the other deck.
+    if (beats < 1) deck.slip ??= deck.playing ? reanchor(deck.anchor, this.ctx.currentTime, { loop: null }) : null;
+    else deck.slip = null;
     deck.setLoop({ start, end, beats });
+  }
+
+  private exitLoop(deck: Deck): void {
+    const slip = deck.slip;
+    deck.slip = null;
+    deck.setLoop(null);
+    const at = this.ctx.currentTime;
+    if (slip && deck.playing) deck.seek(positionAt(slip, at), at);
   }
 
   private jump(deck: Deck, beats: number): void {
     if (!deck.track) return;
     const g = deck.track.grid;
+    const at = this.ctx.currentTime;
+    const target = g.timeAtBeat(g.beatAt(deck.position(at)) + beats);   // whole beats keep the phase
+    deck.slip = null;
     deck.setLoop(null);
-    deck.seek(g.timeAtBeat(g.beatAt(deck.position()) + beats)); // whole beats keep the phase
+    deck.seek(target, at);
   }
 
   private seekFraction(deck: Deck, f: number): void {
     if (!deck.track) return;
     const g = deck.track.grid;
+    const at = this.ctx.currentTime;
     let t = Math.min(1, Math.max(0, f)) * deck.track.analysis.duration_s;
     if (this.quantize) {
       if (deck.playing) {
         // Keep the current bar phase so a synced deck stays in time after the jump.
-        const phase = frac(g.barAt(deck.position()));
+        const phase = frac(g.barAt(deck.position(at)));
         t = g.timeAtBar(Math.round(g.barAt(t) - phase) + phase);
       } else {
         t = g.nearestBeatTime(t);
       }
     }
+    deck.slip = null;
     deck.setLoop(null);
-    deck.seek(t);
+    deck.seek(t, at);
   }
 
   // ------------------------------------------------------------ loading

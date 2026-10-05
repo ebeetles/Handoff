@@ -52,7 +52,7 @@ The seams between those boxes are typed contracts. That's what lets separate age
 
 | # | Contract | Lives in | Written by → read by |
 |---|---|---|---|
-| C1 | TrackAnalysis v1 | `contracts/track_analysis.schema.json`, mirrored in `web/src/contracts/track.ts`, fixture in `contracts/fixtures/` | pipeline → web, planner |
+| C1 | TrackAnalysis v2 | `contracts/track_analysis.schema.json`, mirrored in `web/src/contracts/track.ts`, fixture in `contracts/fixtures/` | pipeline → web, planner |
 | C2 | Control ids + 0..1 semantics | `web/src/control/controls.ts` | inputs, automation → engine, UI |
 | C3 | Command union | `web/src/control/commands.ts` | inputs, co-DJ → engine |
 | C4 | PointerSample | `web/src/input/gesture.ts` | input adapters (mouse, hands) → GestureController |
@@ -71,7 +71,7 @@ To change a contract: bump its version, update writer and reader in the same cha
 | 2 Audio engine | v0.1 done |
 | 3 Control layer | Done |
 | 4 Board UI | v0.1 done |
-| 5 Hand input | Not started |
+| 5 Hand input | v0.1 built and tested on synthetic hands; real-camera definition-of-done checks pending |
 | 6 Transition recipes + automation | Not started |
 | 7 Candidates + offline Jev scoring | Not started |
 | 8 Backend | Not started |
@@ -91,7 +91,7 @@ Repo layout, the TrackAnalysis schema, the shared fixture tested from both Pytho
 
 **Builds.** `pipeline/preprocess.py` turns a folder of tracks into `web/public/library/`. Per track it computes:
 
-- A beat grid. It beat-tracks, fits t_i = a + b·i by least squares, and, if the tempo is steady (RMS residual under 4% of a beat), replaces the tracked beats with the fitted line. It then refines the phase on a high-resolution onset envelope and extends the grid over the whole track.
+- A beat grid. It searches directly for the constant grid t_i = a + b·i that maximizes a kick-weighted onset envelope summed at the grid times. b is searched within ±4% of the tracker's tempo and a over a full beat; tracked beat indices are never used. It then measures the grid's offset from the kick in each 8-bar segment. If the worst offset (`max_drift_ms`) is at most 10 ms, the track is beatmatchable and the grid replaces the tracked beats over the whole track.
 - The downbeat phase, from low-band onsets, harmonic change, and overall onset strength.
 - Key, via Krumhansl-Kessler profiles on chroma above C2, mapped to Camelot.
 - Per-bar band energy (low, mid, high) and loudness.
@@ -100,10 +100,11 @@ Repo layout, the TrackAnalysis schema, the shared fixture tested from both Pytho
 
 Stems come from Demucs (`--stems`) or from `<name>.stems/` folders. Per-file fixes go in `overrides.json`.
 
-**Verified.** 8 pytest checks on two synthetic tracks with known answers:
+**Verified.** pytest checks on synthetic tracks with known answers (the two demo tracks, plus beat-grid tracks with loud offbeat hats, injected half-beat tracker slips, and a drifting tempo):
 
 - BPM within 0.1.
 - Downbeat within 10 ms (measured about 4 ms).
+- Grid within 5 ms of every kick despite offbeat hats and tracker slips; a ±25 ms drifting track is flagged not beatmatchable.
 - Camelot number correct.
 - Exact section boundaries on one track.
 - Schema validity, phrase coverage, and index consistency.
@@ -114,12 +115,14 @@ Stems come from Demucs (`--stems`) or from `<name>.stems/` folders. Per-file fix
 2. Kick fundamentals leaked into chroma and produced wrong keys; fixed with chroma above C2.
 3. The beat grid sat 28 ms late from a 2048-sample window; a high-resolution phase pass brought it to about 4 ms.
 4. Weighting features before z-scoring undid the weights, so a breakdown was missed.
+5. (Real tracks.) A line fit through tracked beats breaks when the tracker slips half a beat: every later beat gets the wrong index (Frog Prince: residual 0.25, slope biased to 123.965 BPM). Full-band onsets also put the phase on loud offbeat hats; Zute's old grid had the right tempo but was half a beat off. Fixed by the direct kick-weighted grid search.
+6. `onset_strength(S=...)` without `n_fft` centers as if n_fft were 2048, which made a hop-64 band envelope 35 ms late. Always pass `n_fft` with `S=`.
 
 **1b: next upgrades (do with real tracks, before Chunk 7):**
-- [ ] Run on 10–20 real tracks across the genres you'll actually mix. Calibrate `BEATMATCHABLE_MAX_RESIDUAL_RATIO` and the section novelty threshold, and record the values and reasons in the decision log below.
+- [ ] Run on 10–20 real tracks across the genres you'll actually mix. Calibrate `BEATMATCHABLE_MAX_DRIFT_MS` / `DRIFT_MIN_SALIENCE` and the section novelty threshold, and record the values and reasons in the decision log below.
 - [ ] Downbeat accuracy on real music is the weakest point. Spot-check every track in the board: the phrase lines on the waveform should land on obvious changes. Fix with `downbeat_shift`, and consider a neural downbeat tracker (e.g. Beat This!) if more than ~20% need fixing.
 - [ ] Run Demucs on the real tracks (overnight or on Colab) and check that stem lengths match the mix.
-- [ ] Optional: CLAP vibe tags per phrase, as strings in a new `tags` field (schema v2).
+- [ ] Optional: CLAP vibe tags per phrase, as strings in a new `tags` field (schema v3).
 
 **Pitfalls.** Always analyze the exact file that is served, never the original upload. Never serve lossy audio without measuring its decode offset.
 
@@ -187,6 +190,87 @@ A browser-found bug is already fixed: seeks landed 6 ms late because of the decl
 - No dropped grabs during a 30-second continuous fader move.
 - Inference cost is measured and stays under 10 ms per frame on your laptop.
 
+**v0.1 (2026-10-04).** `handTracking.ts` (pure: geometry, pinch hysteresis, One Euro, stable ids, dropout grace, stats), `handAdapter.ts` (camera, HandLandmarker, 30 fps loop, preview), `oneEuro.ts`, and `ui/CameraPanel.tsx` (Camera toggle, mirrored preview with landmarks, live readout of inference ms, hold drift, dropped grabs).
+- Verified with vitest on synthetic landmark streams through the real GestureController and ControlStore:
+  - pinch grab/turn/release, and the hysteresis band;
+  - a 100 ms dropout keeps the grab, and 200 ms releases it;
+  - two hands on two controls with flickering handedness labels;
+  - the mouse working alongside a hand;
+  - hold-still drift < 1%/s under ~2 px landmark jitter (simulated).
+- Verified in Chromium with a fake camera (smoke test): the model and wasm load from our own server in dev and in a production build, inference runs, the camera turns off, and there are no errors or third-party requests.
+- Inference with no hand in frame: 9.6 ms mean, 12.7 ms p95 in headed Chromium on an M3 Max (GPU delegate, ANGLE Metal). Headless Chromium (SwiftShader) runs ~56 ms, which is not representative.
+- **Still to check with a real camera** (the definition of done):
+  - two-hand play (sync, filter sweep, crossfader);
+  - real hold drift (target < 1%/s);
+  - a 30 s fader move with 0 dropped grabs;
+  - inference < 10 ms while hands are tracked;
+  - that `hand-left` really is your left hand (it only affects naming; ids follow position);
+  - tuning pinch thresholds and One Euro parameters.
+
+**v0.2 (2026-10-04), after first real-hand use** ("pinching is inconsistent, I have to really clearly show my thumb and index"; "hard to use in general"):
+- **Pinch:** measured from the thumb tip to the index's last segment (7→8) instead of tip to tip, with down < 0.30 / up > 0.45. Grace period 250 ms. MediaPipe presence and tracking confidence lowered to 0.3.
+- **Lock-on:** hand pointers only, in GestureController. Lock within 56 px of a control, keep until 96 px, switch only to a target ≥ 24 px closer. Pinch grabs the locked target, the cursor snaps onto it, and `data-locked` outlines it. Seek strips only lock from inside.
+- **Twist knobs:** knobs are `twist` targets. The hand's palm rotation (`PointerSample.angle`) turns them at 150° per full range, while faders still slide.
+- **Recorder:** "Record 10 s of landmarks" downloads raw frames (JSON) to tune on real hands and to use as replay fixtures.
+- **Verified:** vitest on synthetic hands (51 web tests), covering lock and switch hysteresis, hidden and unmounted targets, the seek-strip rule, twist turning and ignoring translation, counter-clockwise twist, mouse vertical drag on a twist knob, and twist hold-still drift < 1%/s. The browser smoke test checks lock-on highlight, the snapped cursor and twist on the real layout.
+- **Still needs a real hand:** whether the new pinch metric and thresholds fix the misses, whether twist feels right (150° range, filter lag), and whether 56 px lock-on is the right reach.
+
+**v0.3 (2026-10-04), feedback on v0.2:** twist "works pretty well". Lock-on was "too strict … all the buttons and knobs and sliders are so close together". Pinch was "too forgiving … if my fingers are just kind of relaxed it would register as a press".
+- **Pinch:** back to thumb tip to index tip, now strict: down < 0.20 (fingertips basically touching), up > 0.32. The panel shows the live value next to the grab threshold.
+- **Lock-on follows the hand:**
+  - inside a control (≥ 4 px past its edge) locks it at once;
+  - in gaps, the nearest control within 40 px wins, with 8 px hysteresis;
+  - the lock lets go at 56 px.
+  
+  v0.2's 24 px switch margin and 96 px unlock kept the lock on the old control while the hand was over its neighbour.
+- 52 web tests: packed-controls traversal, no flicker on a shared border, and a relaxed thumb by the index joint isn't a pinch. The smoke test passes.
+
+**v0.4 (2026-10-04), feedback on v0.3:** "no lock on is still better", and "when I pinch the cursor moves because my fingers move naturally while pinching, which means I click on something that I wasn't trying to click on."
+- **Lock-on removed.** Hands hit-test exactly like the mouse: a pinch grabs what's under the cursor.
+- **The cursor anchor is the index/middle knuckle midpoint** (landmarks 5, 9), not the thumb/index tip midpoint. Pinching curls the index and lifts the thumb, which moved a fingertip cursor by ~15+ px at the click (and again at the release); the knuckles don't move. Twist knobs are unchanged (palm rotation; position is ignored while twisting).
+- 48 web tests: a realistic pinch (index curling, thumb closing) leaves the cursor exactly in place while the old anchor moved > 15 px; a pinch beside a control grabs nothing. The smoke test checks twist on the real layout and that a pinch beside a knob does nothing.
+
+**v0.5 (2026-10-04), feedback on v0.4:** the steady pinch cursor "works great", but "when I'm twisting a knob the cursor moves somewhere else, causing issues".
+- **Rotation-corrected cursor.** A twist turns the hand about the pinch point and swings the knuckles around it. The cursor subtracts that swing.
+  - At each pinch start: d = knuckles − fingertip midpoint (the pivot) is captured.
+  - Each frame: offset −= R(θ−θref)·d − R(θprev−θref)·d. This telescopes, so noise can't accumulate.
+  - The correction persists after release, so untwisting doesn't move the cursor either. It bleeds off (e^(−travel/200 px)) only while the open hand's corrected cursor travels more than 2 px/frame, so it never creeps on its own.
+- **Release debounce (100 ms).** Twisting can briefly open the pinch. A 1–3 frame blip used to release and re-press: a twist knob hit the double-press reset and snapped to center, and a pad fired twice. A release now needs the pinch open ≥ 100 ms, and the hand sends nothing while one is pending, so an opening hand can't drag a fader.
+- 53 web tests:
+  - a 60° twist keeps the cursor within 1 px (the knuckles alone moved > 60 px);
+  - untwisting after release moves it < 2 px;
+  - an open hand held still 10 s with jitter creeps < 3 px;
+  - 400 px of travel removes > 70% of the correction;
+  - turning the hand on a fader leaves it unchanged;
+  - a mid-twist flicker keeps the grab;
+  - a blip on a pad fires once, and a deliberate double pinch still resets.
+
+**v0.6 (2026-10-04), feedback on v0.5:** "on average no lock on is better, [but] lock on for knobs that twist was actually better because that's how we keep the cursor in place while turning. For buttons and sliders it's better to not have lock on." Also asked for a layout optimized for hand control, and faster loops.
+- **Hybrid lock-on.** Only twist knobs pull a hand in: within 36 px, the nearest knob wins with 8 px hysteresis, and the lock lets go at 52 px. While locked or twisting, the cursor sits on the knob's center. Being inside any button or slider cancels a knob's pull. Seek strips are mouse-only for hands.
+- **Rolls:** 1/2, 1/4, 1/8, 1/16. They start on their own grid (`loopRange`, unit-tested). Each deck keeps a `slip` anchor (where playback would be without the roll, re-anchored on rate changes), and leaving a roll seeks to it. A fractional loop otherwise exits up to a beat off.
+- **Clock race fixed** (found by the new smoke checks). `currentTime` can step a render quantum between two reads in one task, so jumps and roll exits landed ~3 ms out of phase under load. `seek(pos, at)` now takes the clock read that `pos` came from. Sync, jump, roll exit and seek all read the clock once. 3 consecutive smoke runs pass 22/22, with roll exits at -0.6 ms.
+- **Layout for hands** (measured at 1920×1080, 1440×900, 1280×800: no overlapping or clipped targets):
+  - **Pads:** 14 px apart (was 8). Knobs are bigger (EQ 60, filter 70) and evenly spaced, at least 6 px apart (were touching).
+  - **Tempo faders** sit on each deck's outer edge, off the path between the pads and the mixer.
+  - **Transport row:** Play is double-width next to Sync, with Sync on the mixer side (deck B mirrors).
+  - **Cue** (it stops a playing deck) moves away from Play, to the outer end of a bottom "Cue and jump" row.
+  - **Row order** follows use in a transition: Transport, Parts, Loop, Roll, Cue and jump.
+  - **Snap-to-beat and Master** move to the top bar (rare settings; the top edge is the hardest place to reach with a raised hand). That gives the mixer the full column.
+  - **Display shrinks; hand targets don't:** waveforms 84 → 66 px, phrase ring 150 → 116 px, overview 36 px. Under 860 px tall a compact mode keeps pads ≥ 44 px.
+- **Tests:** 62 web tests; the smoke test passes 22/22.
+
+**v0.7 (2026-10-04), feedback on v0.6:** the pinch is "a little too strict again", and "the turning is behaving weirdly now with the lock".
+- **Pinch sweet spot.** A relaxed thumb against the index's last joint reads ~0.24 tip-to-tip, the same as a sloppy real pinch, so no single threshold works (0.30 pressed on relaxed hands, 0.20 missed pinches).
+  - **Press** needs tip ratio < 0.25 *and* the thumb at the fingertip, not back at the joint: tip − joint ratio < 0.1. Sloppy (0.23) and pad-to-pad pinches press; a relaxed thumb at the joint doesn't.
+  - **Release** at > 0.35, joint ignored, so twists hold.
+  - **Pinch slider** in the camera panel (0.18 to 0.32, saved per browser) for hands and cameras that differ.
+- **Twist fixes** (each caused odd turning, made likelier by lock-on encouraging quick re-grabs):
+  - **No double-pinch reset for hands.** Re-grabbing within 350 ms to keep turning snapped the knob to center. Mouse double-click still resets.
+  - **The palm reference is re-taken at every pinch.** Against the first-seen shape, a change in hand tilt bent the twist (nonlinear gain).
+  - **The angle filter snaps to the hand at each pinch.** After a fast unwind the knob otherwise drifted back a few degrees by itself.
+  - **Overshoot re-bases.** Turning (or dragging a fader) past an end and back responds at once, with no dead zone.
+- **Tests:** 66 web tests (sweet-spot cases, slider, ratchet without reset, end re-basing, linear twist after a tilt). The smoke test passes 23/23, including the slider.
+
 **Pitfalls.**
 - Don't put landmark processing in React state (re-renders every frame).
 - Camera permission errors need a clear message in the UI.
@@ -214,7 +298,7 @@ Two points at the same bar mean a step; otherwise values interpolate linearly. "
 - `web/src/coDJ/automation.ts`: a lookahead scheduler (the "two clocks" pattern). A timer every ~25 ms schedules anything due in the next ~100 ms. Bar positions convert to AudioContext time through the outgoing deck's grid and anchor. Lanes write `store.set(id, v, "auto")`.
 - Add `engine.scheduleControl(id, value, ctxTime)` for exact-time steps. Otherwise the beat-quantized stem toggles add up to a beat of delay.
 - Echo: a per-deck delay with feedback on an FX send, needed for echo-out.
-- First recipes: bass swap, drum bridge, filter handoff, echo out, loop roll. The loop roll needs loop sizes 1/2, 1/4, and 1/8 beat; the engine already accepts fractional beats.
+- First recipes: bass swap, drum bridge, filter handoff, echo out, loop roll. The loop roll can use the roll pads' commands (`loop` with beats 1/2 to 1/16), which already slip back in phase on exit (Chunk 5 v0.6).
 - A temporary "Try transition" button for testing.
 
 **Takeover rule.** If a human grabs a control during a recipe, that lane belongs to the human until the recipe ends.
@@ -302,3 +386,44 @@ Cut order if time runs out: voice, then guided mode, then live re-ranking (use o
 - **2026-10-03** Hand input goes through the same GestureController as the mouse; continuous controls are relative-drag.
 - **2026-10-03** `seek()` compensates for the 6 ms declick delay. Found by the browser smoke test (6 ms post-sync offset); now 0.00 ms.
 - **2026-10-03** Fonts are self-hosted via @fontsource; no third-party requests at runtime.
+- **2026-10-03** `fetch_audius.py` (spec: api.audius.co/v1/swagger.yaml) fetches a track only if `is_downloadable` and `access.download` are both true. Live tests showed the search filter `only_downloadable=true` returning mostly non-downloadable tracks, and roughly half of `is_downloadable` tracks being download-gated. Search uses `has_downloads=true`, which does filter. Downloads are usually 320 kbps MP3; preprocess still serves and analyzes the FLAC made from them, so the analyze-what-you-serve rule holds. The API key goes in `x-api-key` and is stripped on the redirect to the content node.
+- **2026-10-04** Beat grid: replaced the least-squares fit through tracked beats with a direct search maximizing S(a, b) = Σ env(a + b·i). The envelope is low-band (<150 Hz) onsets + 0.25 × full-band onsets, each scaled to mean 1, at hop 64 / n_fft 512. b is searched within ±4% of the tracker tempo, because librosa's tempo comes from integer lags at hop 512 and is quantized in ~2.5% steps (123.05 / 129.20 near 125 BPM). The search is coarse (fold modulo b), then fine (0.1 ms). The old ±50 ms phase refinement is subsumed by the fine stage. Why: Frog Prince's tracker slipped half a beat ~4 times, and loud offbeat hats pull a full-band phase search half a beat late (that happened to Zute's old grid).
+- **2026-10-04** Beatmatchable is now `max_drift_ms ≤ 10` (`BEATMATCHABLE_MAX_DRIFT_MS`), replacing `grid_residual_ratio < 0.04`. This is TrackAnalysis schema v2 (`grid_residual_ratio` removed, `tempo.max_drift_ms` added) and pipeline 0.2.0.
+  - How it's measured: per 32-beat segment, the offset (within ±¼ beat) that maximizes the same envelope.
+  - Which segments count: only those with an on-beat kick, meaning an interior low-band peak within ±¼ beat whose max/mean salience is ≥ 1.6 (`DRIFT_MIN_SALIENCE`). Pad breakdowns (salience 1.17) and intros with only offbeat bass (Zute) are skipped.
+  - Why 10 ms: steady tracks measure 0.1–5.1 ms across 5 tracks (segment noise at hop 2.9 ms), so 10 ms gives 2× margin. Two decks each within 10 ms keeps worst-case kick misalignment around 20 ms, roughly where flams become audible. A ±25 ms synthetic drift measures 47 ms.
+  - Grid choice stays coupled to beatmatchable: regular iff beatmatchable, unless `force_grid`.
+- **2026-10-04** Hand input (Chunk 5):
+  - **Pinch ratio** uses MediaPipe's 3D metric `worldLandmarks`, not 2D image points, so a tilted palm doesn't shorten the hand length and fake a pinch. Thresholds stay at down < 0.25 / up > 0.35 until tuned on real hands.
+  - **Pointer ids** follow position: each hand is matched to the nearest known hand (within 25% of the viewport width), and handedness is only used for a new hand. MediaPipe labels flicker and sometimes give both hands the same label, which would merge two hands into one pointer. Labels are swapped because MediaPipe assumes a mirrored image and we pass the raw camera frame (documented: "handedness is determined assuming the input image is mirrored").
+  - **Dropouts:** a hand missing for ≤ 150 ms keeps its grab; after that, `gestures.lost()` releases it.
+  - **One Euro** filters in viewport px (minCutoff 1.0, beta 0.01; beta is per px/s).
+  - **Self-hosted assets:** the wasm comes from `node_modules` via Vite `?url`. The model (`hand_landmarker.task` float16 v1, md5 15318430…) is fetched once into `web/public/models/` (gitignored) by `npm run fetch-hand-model`, which also runs before dev and build. MediaPipe's JS loads only when the camera is first turned on.
+  - **Warm-up:** the first inference compiles GPU shaders and blocks the main thread for ~5 s, so the adapter runs one inference on a blank frame while the UI says "Starting". Inference stats exclude the first 5 frames.
+- **2026-10-04** Hand input v0.2:
+  - **Contract C4 extended with two optional fields** (non-breaking; C4 has no version number): `PointerSample.angle` (radians, clockwise on screen, only changes used) and `TargetSpec.continuous.twist`. Writer: handTracking. Reader: GestureController.
+  - **Pinch metric** is now thumb tip to the index distal segment (7→8). The tips separate in MediaPipe's estimate when the thumb meets the pad at an angle or is occluded. The relaxed-hand thumb rests near the index PIP/MCP, which is why the segment isn't extended past 7.
+  - **Thresholds** 0.30 / 0.45 (wider band so twisting, which distorts finger landmarks, doesn't release). Grace 250 ms. MediaPipe minHandPresence and minTracking confidence 0.3 (detection stays 0.5). All are unvalidated on real hands; tune from recordings.
+  - **Twist** angle is the 2D least-squares (Kabsch) rotation of the palm landmarks (0, 5, 9, 13, 17) relative to the hand's first-seen shape, in mirrored, aspect-corrected coords. It's absolute rather than accumulated frame to frame, so it can't random-walk, and it's One Euro filtered in degrees (minCutoff 1, beta 0.02).
+  - **Twist range** is 150° of hand rotation per full knob range (about ±75° from center, inside a wrist's comfortable ±80°). The drawn knob sweeps 288°, so it turns about 1.9× the hand.
+  - **Lock-on** is 56 / 96 / 24 px (lock / unlock / switch margin), hands only, so the mouse stays exact.
+- **2026-10-04** Hand input v0.3, from user feedback:
+  - **Pinch** is thumb tip to index tip again, down < 0.20 / up > 0.32. The segment metric made relaxed hands press, and the user prefers missing a sloppy pinch to a false press. The 0.12 hysteresis band keeps twists held (twist confirmed to work well).
+  - **Lock-on rule:** inside a control (4 px edge margin against border jitter) wins immediately; otherwise nearest within 40 px, 8 px hysteresis, unlock at 56 px. The controls are packed tighter than the v0.2 margins.
+- **2026-10-04** Hand input v0.4, from user feedback:
+  - **Lock-on removed** (GestureController is back to exact hit-testing for every pointer). On this tightly packed board, even a hand-following lock felt worse than none.
+  - **Cursor anchor:** index/middle knuckles (5, 9) instead of the thumb/index tips. Finger motion during a pinch moved the tip midpoint at the moment of the click; the knuckles stay still.
+  - **Kept:** twist knobs, the strict tip-to-tip pinch (0.20 / 0.32), and the seek clamp to 0..1.
+- **2026-10-04** Hand input v0.5:
+  - **The cursor ignores rotation about the pinch point** (correction captured at each pinch start; it persists through release and bleeds off with open-hand travel: 200 px e-folding, 2 px/frame deadband).
+  - **Releases need the pinch open ≥ 100 ms** (`releaseHoldMs`). Twist flickers otherwise triggered the double-press reset and double-fired pads. The cost is up to 100 ms of release latency, during which the hand sends no samples.
+- **2026-10-04** Hand input v0.6 + layout, from user feedback:
+  - **Knob-only lock-on** (36 / 52 / 8 px). Twisting needs the cursor pinned to the knob, while buttons and sliders felt better exact.
+  - **Hands can't seek** on the overview. It's the most destructive accidental pinch; jump and cue cover it.
+  - **Layout rules for hands:** targets ≥ 44 px tall and ≥ 14 px apart; risky controls (tempo, Cue, jumps) on outer edges and away from frequent ones; rows ordered by use in a transition; rare settings at the top edge.
+- **2026-10-04** Rolls (loops under a beat) slip back on exit via a per-deck `slip` anchor, so a synced deck stays in phase. Loops of a beat or more keep classic behavior.
+- **2026-10-04** `Deck.seek(pos, at)`: a seek target computed from a clock read must pass that read. `currentTime` can advance a render quantum within one task (seen as ~3 ms phase errors in the smoke test).
+- **2026-10-04** Hand input v0.7:
+  - **Pinch press** = tip ratio < 0.25 and (tip − joint) < 0.1; release > 0.35. The joint guard separates a relaxed thumb from a sloppy pinch, which tip distance alone can't.
+  - **User-adjustable grab threshold** (0.18–0.32, localStorage) because hands and cameras differ.
+  - **Twist:** no hand double-press reset; palm reference and angle filter re-taken at each pinch; ends re-base.
