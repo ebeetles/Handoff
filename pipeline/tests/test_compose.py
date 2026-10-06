@@ -44,8 +44,8 @@ def presence(n, vocals, drums, music):
     return {"vocals": full(vocals, 0.0), "drums": full(drums, 0.9), "bass": full(music, 0.8), "other": full(music, 0.8)}
 
 
-def plan(moves, start=96, idea="t"):
-    return {"idea": idea, "rationale": "r", "out_start_bar": start, "moves": moves}
+def plan(moves, start=96, idea="t", shift=0):
+    return {"idea": idea, "rationale": "r", "out_start_bar": start, "moves": moves, "in_key_shift": shift}
 
 
 ENTER = {"move": "in_enter", "at_bar": 0, "from_bar": 0}
@@ -370,7 +370,6 @@ def test_tempo_ride_reaches_twice_the_fader_range():
     assert ride_sync(170, 128) is None
     pf = pair_facts(track(bpm=145), track("b", bpm=128, camelot="8A"))
     assert pf["tempo"]["sync"] is None and pf["tempo"]["tempo_ride"]["out_rate_change_pct"] == -8.0
-    assert pf["key"]["when_locked"]["semitones"] == pytest.approx(12 * np.log2(145 / 128), abs=0.01)
 
 
 def test_summary_marks_beatless_and_drums_only_windows():
@@ -429,16 +428,6 @@ def test_key_clash_counts_pitched_parts_only():
     assert score(drums_only, a, b)["measures"]["key_clash_bars"] == 0
 
 
-def test_locked_decks_are_judged_by_the_key_they_are_heard_in():
-    """Same written key, but 128 synced to 124 plays 55 cents flat: pitched parts sound sour.
-    3.1% more tempo is a key the critic must not call 'the same'."""
-    blend = [ENTER, XF, STOP16]
-    same = score(blend, track(stems=True, music=0.8), track("b", stems=True, music=0.8))
-    off = score(blend, track(stems=True, music=0.8), track("b", bpm=128, stems=True, music=0.8))
-    assert same["measures"]["key_clash_bars"] == 0 and off["measures"]["key_clash_bars"] > 0
-    assert any("semitones off" in r for r in off["reasons"])
-
-
 def test_unlocked_overlap_is_fine_without_two_beats():
     """174 and 124 BPM can't lock. B's beat under A's beatless outro is a legitimate bridge; two
     beats together is a train wreck (invalid). Without stems, any unlocked overlap stays invalid."""
@@ -451,16 +440,6 @@ def test_unlocked_overlap_is_fine_without_two_beats():
     wreck = score(blend, track(stems=True, camelot="8A"), b)
     assert not wreck["valid"] and wreck["measures"]["rhythm_clash_bars"] >= 1 and "train wreck" in wreck["reasons"][0]
     assert not score(blend, track(), track("b", bpm=174))["valid"]
-
-
-def test_a_ride_under_a_melody_costs_more_than_under_drums():
-    a, b = track(bpm=145, stems=True, music=0.8), track("b", bpm=128, stems=True)
-    ride = [RIDE, {"move": "in_enter", "at_bar": 8, "from_bar": 0},
-            {"move": "crossfade", "start_bar": 8, "end_bar": 16, "to": 1, "shape": "ramp"}, STOP16]
-    sliding = score(ride, a, b)
-    stripped = score([{"move": "stem_drop", "deck": "out", "stems": ["bass", "other", "vocals"], "action": "mute", "at_bar": 0}, *ride], a, b)
-    assert sliding["measures"]["ride_tonal_bars"] == 8 and "ride_pitch" in sliding["breakdown"]
-    assert stripped["measures"]["ride_tonal_bars"] == 0
 
 
 def test_saved_pairs_from_an_older_version_are_recompiled_from_their_plans(tmp_path):
@@ -479,7 +458,7 @@ def test_saved_pairs_from_an_older_version_are_recompiled_from_their_plans(tmp_p
     saved = P.load_saved(path, {"a": a, "b": b}.get)
     assert list(saved) == [("a", "b")]
     c = saved[("a", "b")]["candidates"][0]
-    assert c["source"] == "llm" and c["idea"] == "Paid for" and c["recipe"]["schema_version"] == 3
+    assert c["source"] == "llm" and c["idea"] == "Paid for" and c["recipe"]["schema_version"] == 4
     assert c["critic"] == pair["candidates"][0]["critic"]
     doc = {"schema_version": P.TRANSITIONS_VERSION, "generated_at": "now", "pairs": list(saved.values())}
     jsonschema.validate(doc, json.loads((CONTRACTS / "transitions.schema.json").read_text()))
@@ -581,3 +560,175 @@ def test_unavoidable_penalties_are_flagged_not_chased():
     assert fb["penalties"] == {} and "stretch" in fb["unavoidable"] and P.good_enough(c)
     c["critic"]["breakdown"]["dip"] = -3.0
     assert P.feedback(c)["penalties"] == {"dip": -3.0} and not P.good_enough(c)
+
+
+# ---------------------------------------------------------------- creativity (concepts, memory, novelty, loop_hold)
+
+import random  # noqa: E402
+
+from handoff_pipeline.compose.concepts import History, draw, feasible, similarity  # noqa: E402
+
+
+def test_concepts_fit_the_tracks_and_rotate_away_from_recent_work():
+    plain = {c["id"] for c in feasible(track(), track("b", bpm=174))}      # no stems, can't lock
+    assert "hook_loop" not in plain and "acapella_over" not in plain and {"energy_slam", "turntable_stop"} <= plain
+    rich = {c["id"] for c in feasible(track(stems=True, vocals=0.9), track("b", stems=True, vocals=0.9))}
+    assert {"acapella_over", "vocal_preview", "layer_by_layer"} <= rich and "hook_loop" not in rich   # no hook detected
+    a = track(stems=True, vocals=0.9)
+    a.hooks, a.cues = [{"kind": "vocal", "bars": 2, "starts": [16, 24, 40]}], [{"kind": "build", "bar": 88, "bars": 8}]
+    b = track("b", stems=True, vocals=0.9)
+    b.hooks, b.cues = [{"kind": "vocal", "bars": 4, "starts": [8, 24, 40]}], [{"kind": "drop", "bar": 16, "bars": 16}]
+    assert {"hook_loop", "build_handoff", "hook_mashup", "false_drop"} <= {c["id"] for c in feasible(a, b)}
+    a, b = track(stems=True, vocals=0.9), track("b", stems=True, vocals=0.9)
+    recent = [{"concept": c} for c in ("hook_loop", "false_drop", "energy_slam")]
+    for seed in range(20):
+        picks = draw(a, b, 3, recent, random.Random(seed))
+        assert len({p["id"] for p in picks}) == 3 and not {p["id"] for p in picks} & {"hook_loop", "false_drop", "energy_slam"}
+
+
+def test_similarity_compares_toolkits_not_the_moves_every_plan_has():
+    recent = [{"toolkit": ["echo_throw", "stem_drop"]}]
+    assert similarity([ENTER, XF, {"move": "stem_drop"}, {"move": "echo_throw"}, STOP16], recent) == 1
+    assert similarity([ENTER, XF, {"move": "loop_hold"}, STOP16], recent) == 0
+    assert similarity([ENTER, XF, STOP16], []) == 0
+
+
+def test_composing_with_memory_draws_concepts_prefers_novelty_and_remembers(tmp_path):
+    """The draft that repeats recent work loses to a fresh one scoring a little lower; a
+    revision is told only its own concept; the kept transition joins the history."""
+    import plan_transitions as P
+    a, b = bassy()
+    a.has_stems = b.has_stems = True
+    hist = History(tmp_path / "h.jsonl")
+    for _ in range(2):
+        hist.add(("x", "y"), {"idea": "old", "plan": {"moves": SWAPPED}}, "long_eq_blend")
+    same = plan(SWAPPED, idea="Same again")                              # clean (no penalties), but a repeat
+    fresh = plan(MUDDY[:1] + [{"move": "eq", "deck": "in", "band": "low", "start_bar": 0, "end_bar": 0, "to": "kill"},
+                              {"move": "eq", "deck": "in", "band": "low", "start_bar": 8, "end_bar": 8, "to": "flat"},
+                              {"move": "eq", "deck": "out", "band": "low", "start_bar": 8, "end_bar": 8, "to": "kill"}] + MUDDY[1:],
+                 idea="Fresh")
+    sent = []
+
+    def send(params):
+        sent.append(params)
+        cands = [same, fresh] if len(sent) == 1 else [fresh]
+        return {"text": json.dumps({"candidates": cands}), "stop_reason": "end_turn", "model": params["model"], "usage": {}}
+    pair = P.plan_pair(a, b, "llm", C.Composer(tmp_path / "c", transport=send), 2, refine=2, history=hist, rng=random.Random(1))
+    first = json.loads(sent[0]["messages"][0]["content"])
+    assert len(first["concepts"]) == 2 and [w["idea"] for w in first["recent_work"]] == ["old", "old"]
+    assert pair["candidates"][0]["idea"] == "Fresh" and "_novelty" not in pair["candidates"][0]
+    if len(sent) > 1:
+        assert [c["id"] for c in json.loads(sent[1]["messages"][0]["content"])["concepts"]] == [pair["composer"]["kept_concept"]]
+    assert hist.recent()[-1]["idea"] == "Fresh" and hist.recent()[-1]["concept"] == pair["composer"]["kept_concept"]
+
+
+def test_loop_hold_compiles_to_a_held_loop_and_the_critic_cycles_its_bars():
+    a, b = track(stems=True), track("b", stems=True)
+    a.mid[100:102] = 0.1                                                  # A's bars 100-101 sound different
+    moves = [{"move": "loop_hold", "start_bar": 4, "end_bar": 12, "bars": 2}, {"move": "in_enter", "at_bar": 4, "from_bar": 0},
+             {"move": "crossfade", "start_bar": 4, "end_bar": 12, "to": 1, "shape": "ramp"}, {"move": "out_stop", "at_bar": 12}]
+    r, errs = compile_plan(plan(moves), a, b, "c")
+    assert errs == [] and recipe_errors(r) == []
+    ev = [(e["at_bar"], e["command"], e.get("beats")) for e in r["events"] if e["deck"] == "out"]
+    assert sorted(ev, key=str) == sorted([(4, "loop", 8), (12, "loop_off", None), (12, "pause", None)], key=str)
+    assert critique(r, a, b, len(moves))["valid"]
+    for bad, why in [({"move": "loop_hold", "start_bar": 4, "end_bar": 5, "bars": 2}, "at least one loop"),
+                     ({"move": "loop_hold", "start_bar": 4.5, "end_bar": 12, "bars": 1}, "bar line"),
+                     ({"move": "loop_roll", "start_bar": 10, "end_bar": 12}, "overlap")]:
+        errs = compile_plan(plan([bad if bad["move"] == "loop_hold" else moves[0], *moves[1:], *([bad] if bad["move"] == "loop_roll" else [])]), a, b, "c")[1]
+        assert any(why in e for e in errs), (bad, errs)
+
+
+def test_claudes_loop_move_compiles_like_the_internal_forms():
+    """The output schema has one `loop` move (a 14th move type made the API reject the grammar);
+    it compiles exactly like loop_roll / loop_hold, which older saved plans still use."""
+    from handoff_pipeline.compose.moves import PLAN_SCHEMA, normalize
+    a, b = track(stems=True), track("b", stems=True)
+    rest = [{"move": "in_enter", "at_bar": 4, "from_bar": 0}, {"move": "crossfade", "start_bar": 4, "end_bar": 12, "to": 1, "shape": "ramp"},
+            {"move": "out_stop", "at_bar": 12}]
+    for new, old in [({"move": "loop", "start_bar": 4, "end_bar": 12, "style": "hold_2"}, {"move": "loop_hold", "start_bar": 4, "end_bar": 12, "bars": 2}),
+                     ({"move": "loop", "start_bar": 8, "end_bar": 12, "style": "roll"}, {"move": "loop_roll", "start_bar": 8, "end_bar": 12})]:
+        c = plan([new, *rest])
+        jsonschema.validate({"candidates": [c]}, PLAN_SCHEMA)
+        r1, e1 = compile_plan(c, a, b, "x")
+        r2, e2 = compile_plan(plan([old, *rest]), a, b, "x")
+        assert e1 == e2 == [] and r1["events"] == r2["events"]
+        assert c["moves"][0] == new and normalize(c)["moves"][0] == old       # the stored plan is Claude's own
+    names = [m["properties"]["move"]["const"] for m in PLAN_SCHEMA["properties"]["candidates"]["items"]["properties"]["moves"]["items"]["anyOf"]]
+    assert len(names) <= 13 and "loop_roll" not in names
+
+
+# ---------------------------------------------------------------- structure (TrackAnalysis v4) for the composer and critic
+
+def test_the_composer_sees_sections_cues_and_hooks():
+    t = track(stems=True, vocals=0.9)
+    t.cues = [{"kind": "build", "bar": 88, "bars": 8}, {"kind": "drop", "bar": 96, "bars": 1}]
+    t.hooks = [{"kind": "vocal", "bars": 2, "starts": [16, 24, 40, 48], "strength": 0.97}]
+    s = summary(t)
+    assert s["sections"][0] == {"bars": "0-16", "label": "intro", "energy": "low", "vocals": "unknown", "group": None}
+    assert s["cues"] == [{"kind": "build", "bar": 88, "bars": 8}, {"kind": "drop", "bar": 96}]
+    assert s["hooks"] == [{"kind": "vocal", "bars": 2, "starts": [16, 24, 40, 48]}]
+
+
+def test_landing_bs_drop_in_full_earns_the_payoff():
+    a, b = track(stems=True, drums=0.9, music=0.8), track("b", stems=True, drums=0.9, music=0.8)
+    b.cues = [{"kind": "drop", "bar": 16, "bars": 16}]
+    moves = [{"move": "in_enter", "at_bar": 0, "from_bar": 8}, {"move": "crossfade", "start_bar": 0, "end_bar": 6, "to": 1, "shape": "ramp"},
+             {"move": "out_stop", "at_bar": 12}]
+    landed = score(moves, a, b)
+    assert "drop_lands" in landed["breakdown"] and any("bar 8" in r for r in landed["reasons"])
+    held = score([moves[0], {"move": "stem_drop", "deck": "in", "stems": ["bass"], "action": "mute", "at_bar": 0},
+                  {"move": "stem_drop", "deck": "in", "stems": ["bass"], "action": "unmute", "at_bar": 10}, *moves[1:]], a, b)
+    assert "drop_lands" not in held["breakdown"]                          # B's bass was held back as its drop hit
+
+
+
+# ---------------------------------------------------------------- key lock and key shift
+
+def test_with_key_lock_a_tempo_gap_does_not_detune_and_a_key_shift_fixes_a_clash():
+    """The board has key lock: 128 synced to 124 used to play B 55 cents flat (a clash on its
+    own); now the keys meet as written. 8A and 10A clash (two steps); B shifted -2 semitones is
+    8A... and the critic, compiler and facts agree on it."""
+    from handoff_pipeline.compose.mix import best_key_shift, key_shift_options
+    blend = [ENTER, XF, STOP16]
+    same = score(blend, track(stems=True, music=0.8), track("b", bpm=128, stems=True, music=0.8))
+    assert same["measures"]["key_clash_bars"] == 0
+    a, b = track(stems=True, music=0.8), track("b", camelot="10A", stems=True, music=0.8)
+    assert score(blend, a, b)["measures"]["key_clash_bars"] > 0
+    shift = best_key_shift("8A", "10A")
+    assert shift == -2 and {"in_key_shift": -2, "in_sounds_as": "8A", "distance": 0} in key_shift_options("8A", "10A")
+    r, errs = compile_plan(plan(blend, shift=shift), a, b, "c")
+    assert errs == [] and lane(r, "in", "key") == [[0, round(0.5 - 2 / 12, 4)]]      # set before B is heard, and kept
+    fixed = critique(r, a, b, 3)
+    assert fixed["measures"]["key_clash_bars"] == 0 and fixed["score"] > score(blend, a, b)["score"]
+    assert pair_facts(a, b)["key"]["best_in_key_shift"] == -2 and "when_locked" not in pair_facts(a, b)["key"]
+
+
+def test_a_tempo_ride_no_longer_costs_pitch():
+    a, b = track(bpm=145, stems=True, music=0.8), track("b", bpm=128, stems=True)
+    ride = [RIDE, {"move": "in_enter", "at_bar": 8, "from_bar": 0},
+            {"move": "crossfade", "start_bar": 8, "end_bar": 16, "to": 1, "shape": "ramp"}, STOP16]
+    v = score(ride, a, b)
+    assert "ride_pitch" not in v["breakdown"] and not any("slides" in r for r in v["reasons"])
+
+
+def test_older_plans_without_a_key_shift_still_compile():
+    c = plan([ENTER, XF, STOP16])
+    del c["in_key_shift"]
+    r, errs = compile_plan(c, track(), track("b"), "c")
+    assert errs == [] and not any(l["control"] == "key" for l in r["lanes"])
+
+
+def test_the_key_shift_survives_saving_recompiling_and_revising(tmp_path):
+    """The planner stored only out_start_bar and moves: a composed key shift was compiled once,
+    then lost on recompile, and revisions showed Claude its plan without it."""
+    import plan_transitions as P
+    a, b = track(stems=True, music=0.8), track("b", camelot="10A", stems=True, music=0.8)
+    send, calls = scripted([plan(MUDDY, idea="Shifted", shift=-2), plan(MUDDY, idea="Shifted", shift=-2)])
+    pair = P.plan_pair(a, b, "llm", C.Composer(tmp_path, transport=send), 1, refine=1)
+    c = pair["candidates"][0]
+    assert c["plan"]["in_key_shift"] == -2 and lane(c["recipe"], "in", "key") == [[0, round(0.5 - 2 / 12, 4)]]
+    again = P.recompile_pair(a, b, pair)["candidates"][0]
+    assert again["recipe"]["lanes"] == c["recipe"]["lanes"]
+    if len(calls) > 1:
+        assert json.loads(calls[1]["messages"][1]["content"])["candidates"][0]["in_key_shift"] == -2

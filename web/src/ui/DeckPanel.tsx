@@ -32,7 +32,14 @@ export function DeckPanel({ deck, s }: { deck: DeckId; s: DeckSnapshot }) {
           <div className="track-artist">{s.loaded ? s.artist : "\u00a0"}</div>
           <div className="readouts">
             <div className="readout-big">{s.loaded ? s.bpm.toFixed(1) : "–"}</div>
-            <div className="readout"><small>Key</small>{s.camelot || "–"}</div>
+            <div className="readout key-readout">
+              <small>Key{s.loaded && Math.abs(s.pitchSemitones) >= 0.05 ? ` ${s.pitchSemitones > 0 ? "+" : ""}${Number.isInteger(s.pitchSemitones) ? s.pitchSemitones : s.pitchSemitones.toFixed(1)}` : ""}</small>
+              {s.loaded ? (s.heardCamelot !== s.camelot ? `${s.camelot}→${s.heardCamelot}` : s.camelot) : "–"}
+              <span className="key-shift">
+                <Pad small command={{ type: "keyShift", deck, semitones: -1 }} disabled={off}>−</Pad>
+                <Pad small command={{ type: "keyShift", deck, semitones: 1 }} disabled={off}>+</Pad>
+              </span>
+            </div>
             <div className="readout"><small>Tempo</small>{s.loaded ? `${((s.rate - 1) * 100).toFixed(1)}%` : "–"}</div>
             <div className="readout"><small>Left</small>{s.loaded ? fmtTime(Math.max(0, s.duration - s.position)) : "–"}</div>
           </div>

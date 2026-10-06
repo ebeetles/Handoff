@@ -25,7 +25,7 @@ export function Waveform({ deck }: { deck: DeckId }) {
       const deckColor = cssVar(canvas, "--deck");
       const ink = cssVar(canvas, "--ink");
       const hot = cssVar(canvas, "--hot");
-      const pos = d.position();
+      const pos = d.heardPosition();   // draw what you hear (the key stage delays it)
       const span = WINDOW_REAL_S * d.anchor.rate; // track seconds visible
       const x2t = (x: number) => pos + (x / w - 0.5) * span;
       const t2x = (tt: number) => ((tt - pos) / span + 0.5) * w;

@@ -18,7 +18,8 @@ function snap(o: Partial<DeckSnapshot> = {}): DeckSnapshot {
     loaded: true, trackId: "t", loading: null, error: null, title: "t", artist: "a", camelot: "8A", keyName: "", duration: 300,
     position: 0, playing: false, pending: false, rate: 1, trackBpm: 120, bpm: 120, barPos: 0, beatInBar: 0,
     phraseIndex: 0, phraseCount: 8, phraseBars: 16, barInPhrase: 0, barsToNextPhrase: 16, sectionLabel: "", loop: null,
-    cue: 0, level: 0, synced: false, hasStems: false, beatmatchable: true, ...o,
+    cue: 0, level: 0, synced: false, hasStems: false, beatmatchable: true, pitchSemitones: 0, ...o,
+    heardCamelot: o.heardCamelot ?? o.camelot ?? "8A",
   };
 }
 
@@ -112,7 +113,7 @@ describe("composed transitions (contract C6)", () => {
     expect(list.slice(1).map((c) => c.critic!.score)).toEqual([...list.slice(1).map((c) => c.critic!.score)].sort((x, y) => y - x));
   });
   it("rejects a wrong version", () => {
-    expect(() => assertTransitions({ ...transitionsFixture, schema_version: 999 })).toThrow(/schema_version 3/);
+    expect(() => assertTransitions({ ...transitionsFixture, schema_version: 999 })).toThrow(/schema_version 4/);
   });
 });
 
@@ -200,8 +201,8 @@ describe("AutomationPlayer", () => {
     r.runTo(r.barTime(17) + 1);
     const loops = r.sent.filter((s) => s.cmd.type === "loop" || s.cmd.type === "loopOff");
     expect(loops.map((s) => s.cmd)).toEqual([
-      { type: "loop", deck: "A", beats: 0.5 }, { type: "loop", deck: "A", beats: 0.25 },
-      { type: "loop", deck: "A", beats: 0.125 }, { type: "loopOff", deck: "A" },
+      { type: "loop", deck: "A", beats: 0.5, slip: true }, { type: "loop", deck: "A", beats: 0.25, slip: true },
+      { type: "loop", deck: "A", beats: 0.125, slip: true }, { type: "loopOff", deck: "A" },
     ]);
     for (const [s, bar] of loops.map((s, i) => [s, [12, 14, 15, 16][i]!] as const)) {
       expect(s.now).toBeGreaterThanOrEqual(r.barTime(bar));

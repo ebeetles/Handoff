@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "id": "filter_handoff",
   "name": "Filter handoff",
   "description": "The new track opens up from a muffled low-pass while the old one thins out through a rising high-pass, handing over the space.",

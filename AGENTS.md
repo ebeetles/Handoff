@@ -28,6 +28,8 @@ python web/e2e/smoke.py                     # real-browser audio: launch, sync, 
 python web/e2e/recipes.py                   # every transition recipe, played for real (~5 min)
 python web/e2e/composer.py                  # Compose with AI panel + a mid-track composed transition (canned reply, free)
 python web/e2e/ride_brake.py                # tempo ride, entry at B's own tempo, brake (canned reply, free)
+python web/e2e/hook_loop.py                 # a held loop of A's hook: bar clock runs on, lands back in time (canned reply, free)
+python web/e2e/key_lock.py                  # key lock and key shift, measured as pitch in the deck's output
 # Opt-in, costs one Claude call: python web/e2e/composer_live.py "With My Crew" "EvenFall" 32 --yes-spend
 ```
 

@@ -10,12 +10,12 @@ Two views of the same track:
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 
-from .mix import camelot_distance, choose_sync, key_relation, pitch_offset, ride_sync
+from .mix import best_key_shift, camelot_distance, choose_sync, key_shift_options, ride_sync
 
 MIN_EXIT_BARS = 8   # a transition needs at least this much of the outgoing track left
 
@@ -38,6 +38,8 @@ class TrackData:
     high: np.ndarray
     rms_db: np.ndarray     # per bar, absolute (comparable across tracks)
     presence: dict[str, np.ndarray] | None   # per stem, per bar, 0..1; None = unknown (no stems)
+    cues: list[dict] = field(default_factory=list)    # TrackAnalysis v4: drops, builds, breakdowns, vocal in/out
+    hooks: list[dict] = field(default_factory=list)   # TrackAnalysis v4: most repeated vocal / instrumental phrase
 
     @property
     def energy(self) -> np.ndarray:
@@ -74,6 +76,8 @@ def stem_presence(track_dir: Path, analysis: dict) -> dict[str, np.ndarray] | No
     stems = analysis["audio"]["stems"]
     if not stems:
         return None
+    if analysis["bars"] and "stems" in analysis["bars"][0]:   # TrackAnalysis v4 carries it per bar
+        return {k: np.array([b["stems"][k] for b in analysis["bars"]]) for k in STEM_NAMES}
     cache = track_dir / "stems.json"
     starts = [b["start_s"] for b in analysis["bars"]]
     if cache.exists():
@@ -109,7 +113,7 @@ def load_track(track_dir: Path) -> TrackData:
         key=a["key"]["name"], beatmatchable=a["tempo"]["beatmatchable"], has_stems=a["audio"]["stems"] is not None,
         n_bars=len(bars), phrases=a["phrases"], sections=a["sections"],
         low=band("low"), mid=band("mid"), high=band("high"), rms_db=np.array([b["rms_db"] for b in bars], dtype=float),
-        presence=stem_presence(track_dir, a),
+        presence=stem_presence(track_dir, a), cues=a.get("cues", []), hooks=a.get("hooks", []),
     )
 
 
@@ -142,6 +146,11 @@ def summary(t: TrackData) -> dict:
         "title": f"{t.artist} - {t.title}", "bpm": round(t.bpm, 2), "key": f"{t.key} ({t.camelot})",
         "steady_tempo": t.beatmatchable, "stems": t.has_stems, "bars": t.n_bars,
         "loudness_db": round(float(np.median(t.rms_db)), 1), "phrases": phrases,
+        # Structure (rule-based, see the system prompt): what each section is, the moments, the hooks.
+        "sections": [{"bars": f"{s['start_bar']}-{s['end_bar']}", "label": s["label"], "energy": s["energy_level"],
+                      "vocals": s.get("vocals", "unknown"), "group": s.get("group")} for s in t.sections],
+        "cues": [{"kind": c["kind"], "bar": c["bar"], **({"bars": c["bars"]} if c["bars"] > 1 else {})} for c in t.cues],
+        "hooks": [{"kind": h["kind"], "bars": h["bars"], "starts": h["starts"][:8]} for h in t.hooks],
         "four_bar_windows": [
             {"bar": s, "energy": round(float(t.energy[s:s + 4].mean()), 2),
              "bass": round(float(t.low[s:s + 4].mean()), 2),
@@ -179,17 +188,17 @@ def pair_facts(a: TrackData, b: TrackData) -> dict:
     sync = choose_sync(b.bpm, a.bpm) if steady else None
     ride = ride_sync(a.bpm, b.bpm) if steady else None
     dist = camelot_distance(a.camelot, b.camelot)
-    lk = lock(a, b)
     return {
         "tempo": {"out_bpm": round(a.bpm, 2), "in_bpm": round(b.bpm, 2), "both_steady": steady,
                   "gap_pct": round((b.bpm / a.bpm - 1) * 100, 1),
                   "sync": None if sync is None else {"multiplier": sync[0], "rate_change_pct": round((sync[1] - 1) * 100, 2)},
                   "tempo_ride": None if ride is None else {"multiplier": ride[0], "out_rate_change_pct": round((ride[1] - 1) * 100, 2),
                                                            "in_rate_change_pct": round((ride[2] - 1) * 100, 2) + 0.0}},
+        # Key lock: tempo changes don't move pitch, so the keys meet as written, unless B is
+        # transposed (in_key_shift) before it comes in.
         "key": {"out": a.camelot, "in": b.camelot, "distance": dist, "compatible": dist <= 1,
-                # No key lock: once locked, B sounds this far from A (the tempo ratio sets it).
-                "when_locked": None if lk is None else {"semitones": round(pitch_offset(lk[1], lk[2]), 2),
-                                                        **key_relation(a.camelot, b.camelot, pitch_offset(lk[1], lk[2]))}},
+                "shift_options": key_shift_options(a.camelot, b.camelot),
+                "best_in_key_shift": best_key_shift(a.camelot, b.camelot)},
         "stems": {"out": a.has_stems, "in": b.has_stems},
         "exit_bars": exit_bars(a), "entry_bars": entry_bars(b),
     }

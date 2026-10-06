@@ -7,8 +7,8 @@ import type { StemName } from "../contracts/track";
 export type DeckId = "A" | "B";
 export const DECKS: readonly DeckId[] = ["A", "B"];
 
-export type DeckControl = "eqHigh" | "eqMid" | "eqLow" | "filter" | "volume" | "tempo" | "echo" | `stem.${StemName}`;
-export type GlobalControl = "xfader" | "master" | "quantize";
+export type DeckControl = "eqHigh" | "eqMid" | "eqLow" | "filter" | "volume" | "tempo" | "echo" | "key" | `stem.${StemName}`;
+export type GlobalControl = "xfader" | "master" | "quantize" | "keyLock";
 export type ControlId = `${DeckId}.${DeckControl}` | GlobalControl;
 
 /** Who wrote a value. Automation must yield to a human holding the control. */
@@ -24,6 +24,7 @@ const deckDefs: Record<DeckControl, ControlDef> = {
   volume: { default: 0.8, kind: "continuous", label: "Volume" },
   tempo: { default: 0.5, kind: "continuous", label: "Tempo" },
   echo: { default: 0, kind: "continuous", label: "Echo" },   // send to a 3/4-beat delay; tails ring out after a cut
+  key: { default: 0.5, kind: "continuous", label: "Key" },   // key shift: 0.5 = none, +-1/12 per semitone (mapping.ts keySemitones)
   "stem.drums": { default: 1, kind: "toggle", label: "Drums" },
   "stem.bass": { default: 1, kind: "toggle", label: "Bass" },
   "stem.vocals": { default: 1, kind: "toggle", label: "Vocals" },
@@ -34,6 +35,7 @@ export const CONTROL_DEFS: Record<ControlId, ControlDef> = {
   xfader: { default: 0.5, kind: "continuous", label: "Crossfader" },
   master: { default: 0.8, kind: "continuous", label: "Master" },
   quantize: { default: 1, kind: "toggle", label: "Snap to beat" },
+  keyLock: { default: 1, kind: "toggle", label: "Key lock" },   // tempo changes keep each deck's key (adds 80 ms latency)
   ...(Object.fromEntries(
     DECKS.flatMap((d) => Object.entries(deckDefs).map(([k, v]) => [`${d}.${k}`, v])),
   ) as Record<`${DeckId}.${DeckControl}`, ControlDef>),

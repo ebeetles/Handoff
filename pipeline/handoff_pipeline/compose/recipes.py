@@ -1,4 +1,4 @@
-"""Contract C5 (recipe.schema.json v3) checks shared by the compiler and the tests. The web
+"""Contract C5 (recipe.schema.json v4) checks shared by the compiler and the tests. The web
 mirror is web/src/contracts/recipe.ts (assertRecipe); keep the rules in step."""
 from __future__ import annotations
 
@@ -29,6 +29,8 @@ def semantic_errors(r: dict) -> list[str]:
             errs.append(f"{name}: at most two points per bar (a step)")
         if max(bars) > r["bars"]:
             errs.append(f"{name}: point past the recipe's end")
+        if lane["control"] == "key" and lane["deck"] != "in":
+            errs.append(f"{name}: only the incoming deck's key is shifted by a recipe")
         if lane["control"] == "tempo":
             if lane["deck"] != "out":
                 errs.append(f"{name}: only the outgoing deck's tempo can be automated")

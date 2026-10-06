@@ -79,8 +79,9 @@ export function blockers(r: Recipe, out: DeckSnapshot, inn: DeckSnapshot): strin
     else if (!chooseSync(inn.trackBpm, outBpm)) why.push(`the tempos are too far apart (${inn.trackBpm.toFixed(0)} vs ${outBpm.toFixed(0)} BPM)`);
   }
   const max = r.requires.max_camelot_distance;
-  if (max !== null && camelotDistance(out.camelot, inn.camelot) > max) {
-    why.push(`the keys clash (${out.camelot} and ${inn.camelot})`);
+  // The keys as heard: with key lock, each deck's own key plus its key shift.
+  if (max !== null && camelotDistance(out.heardCamelot || out.camelot, inn.heardCamelot || inn.camelot) > max) {
+    why.push(`the keys clash (${out.heardCamelot || out.camelot} and ${inn.heardCamelot || inn.camelot})`);
   }
   return why;
 }

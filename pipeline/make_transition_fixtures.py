@@ -44,6 +44,18 @@ def main() -> None:
         {"move": "out_stop", "at_bar": 8},
     ]}
     write(ROOT / "contracts/fixtures/sample_ride_brake_transition.json", doc, ride, a, b, "fixture_ride_brake")
+    # Moves v4: A's vocal hook (its bars 20-21) loops three times over B, then A carries on in time.
+    hook = {"idea": "Hook loop over B", "rationale": "A's vocal loops while B's groove arrives; A lands back in time.",
+            "out_start_bar": 16, "moves": [
+        {"move": "in_enter", "at_bar": 0, "from_bar": 32},
+        {"move": "crossfade", "start_bar": 0, "end_bar": 4, "to": 0.5, "shape": "ramp"},
+        {"move": "loop_hold", "start_bar": 4, "end_bar": 10, "bars": 2},
+        {"move": "stem_drop", "deck": "out", "stems": ["drums", "bass", "other"], "action": "mute", "at_bar": 4},
+        {"move": "stem_drop", "deck": "out", "stems": ["drums", "bass", "other"], "action": "unmute", "at_bar": 10},
+        {"move": "crossfade", "start_bar": 12, "end_bar": 12, "to": 1, "shape": "cut"},
+        {"move": "out_stop", "at_bar": 12},
+    ]}
+    write(ROOT / "contracts/fixtures/sample_hook_loop_transition.json", doc, hook, a, b, "fixture_hook_loop")
 
 
 def write(path: Path, doc: dict, candidate: dict, a, b, rid: str) -> None:

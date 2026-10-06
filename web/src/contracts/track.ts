@@ -1,20 +1,28 @@
-// Mirror of contracts/track_analysis.schema.json (v3). If you change one, change both,
+// Mirror of contracts/track_analysis.schema.json (v4). If you change one, change both,
 // bump schema_version, regenerate contracts/fixtures/, and run both test suites.
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 export const STEM_NAMES = ["drums", "bass", "vocals", "other"] as const;
 export type StemName = (typeof STEM_NAMES)[number];
 
 export interface BandEnergy { low: number; mid: number; high: number }
-export interface Bar { index: number; beat_index: number; start_s: number; energy: BandEnergy; rms_db: number }
+/** stems: only for tracks with stems; each stem's level against the mix in the bar, 0..1. */
+export interface Bar { index: number; beat_index: number; start_s: number; energy: BandEnergy; rms_db: number; stems?: Record<StemName, number> }
 export interface Phrase { index: number; start_bar: number; n_bars: number; start_s: number; section_index: number }
 export interface Section {
   index: number; start_bar: number; end_bar: number; start_s: number;
-  label: "intro" | "main" | "break" | "outro"; energy_level: "low" | "mid" | "high";
+  label: SectionLabel; energy_level: "low" | "mid" | "high";
+  vocals: "none" | "some" | "lots" | "unknown";
+  group: number;   // sections that sound alike share a group
 }
+export type SectionLabel = "intro" | "verse" | "build" | "drop" | "chorus" | "breakdown" | "main" | "outro";
+/** A moment, in bars: a drop hitting, the build before it, a breakdown, vocals coming in or stopping. */
+export interface Cue { kind: "drop" | "build" | "breakdown" | "vocal_in" | "vocal_out"; bar: number; bars: number }
+/** The most repeated phrase of the vocal (or other) stem, and every bar it starts at. */
+export interface Hook { kind: "vocal" | "instrumental"; bars: 2 | 4; starts: number[]; strength: number }
 
 export interface TrackAnalysis {
-  schema_version: 3;
+  schema_version: 4;
   id: string;
   title: string;
   artist: string;
@@ -32,6 +40,8 @@ export interface TrackAnalysis {
   phrase_bars: number;
   phrases: Phrase[];
   sections: Section[];
+  cues: Cue[];
+  hooks: Hook[];
   key: { name: string; camelot: string; confidence: number };
   waveform: string;
   meta: { pipeline_version: string; generated_at: string; overrides_applied: Record<string, unknown> };
@@ -60,5 +70,6 @@ export function assertTrackAnalysis(x: unknown): asserts x is TrackAnalysis {
   if (typeof a.first_downbeat_index !== "number" || a.first_downbeat_index < 0 || a.first_downbeat_index > 3) fail("bad first_downbeat_index");
   if (!a.audio || typeof a.audio.mix !== "string") fail("missing audio.mix");
   if (!Array.isArray(a.bars) || !Array.isArray(a.phrases) || !Array.isArray(a.sections)) fail("missing bars/phrases/sections");
+  if (!Array.isArray(a.cues) || !Array.isArray(a.hooks)) fail("missing cues/hooks");
   if (!a.tempo || !(a.tempo.bpm > 0)) fail("bad tempo");
 }

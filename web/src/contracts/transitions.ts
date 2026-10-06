@@ -1,8 +1,8 @@
-// Mirror of contracts/transitions.schema.json (v3): composed transitions per ordered pair,
+// Mirror of contracts/transitions.schema.json (v4): composed transitions per ordered pair,
 // written by pipeline/plan_transitions.py (Chunk 7) to library/transitions.json.
 import { assertRecipe, type Recipe } from "./recipe";
 
-export const TRANSITIONS_SCHEMA_VERSION = 3;
+export const TRANSITIONS_SCHEMA_VERSION = 4;
 
 export interface CriticVerdict {
   valid: boolean;
@@ -18,7 +18,7 @@ export interface Candidate {
   source: "llm" | "rules";
   idea: string;
   rationale: string;
-  plan: { out_start_bar: number | null; moves: Record<string, unknown>[] };
+  plan: { out_start_bar: number | null; in_key_shift?: number; moves: Record<string, unknown>[] };
   errors: string[];
   recipe: Recipe | null;
   critic: CriticVerdict | null;
@@ -33,7 +33,7 @@ export interface PairTransitions {
   candidates: Candidate[];
 }
 
-export interface Transitions { schema_version: 3; generated_at: string; pairs: PairTransitions[] }
+export interface Transitions { schema_version: 4; generated_at: string; pairs: PairTransitions[] }
 
 /** Checks the version and every compiled recipe (the player trusts them). */
 export function assertTransitions(x: unknown): asserts x is Transitions {

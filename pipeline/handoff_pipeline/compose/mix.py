@@ -7,7 +7,7 @@ import math
 import re
 
 TEMPO_RANGE = 0.08
-DEFAULTS = {"eqLow": 0.5, "eqMid": 0.5, "eqHigh": 0.5, "filter": 0.5, "volume": 0.8, "echo": 0.0, "tempo": 0.5,
+DEFAULTS = {"eqLow": 0.5, "eqMid": 0.5, "eqHigh": 0.5, "filter": 0.5, "volume": 0.8, "echo": 0.0, "tempo": 0.5, "key": 0.5,
             "stem.drums": 1.0, "stem.bass": 1.0, "stem.vocals": 1.0, "stem.other": 1.0, "xfader": 0.0}
 
 
@@ -137,3 +137,28 @@ def lane_value_at(points: list[list[float]], bar: float) -> float:
         return points[i][1]
     (b0, v0), (b1, v1) = points[i], points[i + 1]
     return v0 + (v1 - v0) * (bar - b0) / (b1 - b0)
+
+
+KEY_SHIFT_MAX = 2   # semitones the composer may transpose the incoming deck (the board allows 6)
+
+
+def key_value(semitones: int) -> float:
+    """Key shift -> the board's key control (0..1), like mapping.ts keyValue."""
+    return clamp01(0.5 + semitones / 12)
+
+
+def key_shift_options(out_key: str, in_key: str) -> list[dict]:
+    """What transposing the incoming deck by -2..+2 semitones does to the pair's key distance
+    (the board has key lock, so tempo changes don't move pitch; a key shift does)."""
+    return [{"in_key_shift": s, "in_sounds_as": transpose_camelot(in_key, s),
+             "distance": camelot_distance(out_key, transpose_camelot(in_key, s))} for s in range(-KEY_SHIFT_MAX, KEY_SHIFT_MAX + 1)]
+
+
+def best_key_shift(out_key: str, in_key: str) -> int:
+    """The smallest shift that makes the pair compatible (distance <= 1), preferring an exact
+    match among equally small shifts; 0 if nothing within range helps."""
+    opts = key_shift_options(out_key, in_key)
+    ok = [o for o in opts if o["distance"] <= 1]
+    if not ok:
+        return 0
+    return min(ok, key=lambda o: (abs(o["in_key_shift"]), o["distance"]))["in_key_shift"]

@@ -1,10 +1,10 @@
-// Mirror of contracts/recipe.schema.json (v3): transition recipes. Presets are authored by hand
+// Mirror of contracts/recipe.schema.json (v4): transition recipes. Presets are authored by hand
 // in contracts/recipes/*.json; Chunk 7 compiles anchored ones per pair (transitions.json). pipeline/tests/test_recipes.py checks the same rules on the
 // Python side (the Chunk 7 planner reads them too). Change both, and bump schema_version.
 
-export const RECIPE_SCHEMA_VERSION = 3;
+export const RECIPE_SCHEMA_VERSION = 4;
 export const RECIPE_CONTROLS = ["eqLow", "eqMid", "eqHigh", "filter", "volume", "echo",
-  "stem.drums", "stem.bass", "stem.vocals", "stem.other", "xfader", "tempo"] as const;
+  "stem.drums", "stem.bass", "stem.vocals", "stem.other", "xfader", "tempo", "key"] as const;
 export type RecipeControl = (typeof RECIPE_CONTROLS)[number];
 export type RecipeDeck = "in" | "out";
 
@@ -27,7 +27,7 @@ export type StemNeed = "none" | "out" | "in" | "both";
 export interface RecipeAnchor { out_track?: string; in_track?: string; out_start_bar: number; in_from_bar: number }
 
 export interface Recipe {
-  schema_version: 3;
+  schema_version: 4;
   id: string;
   name: string;
   description: string;
@@ -60,6 +60,7 @@ export function assertRecipe(x: unknown): asserts x is Recipe {
       if (bars.some((b) => bars.filter((c) => c === b).length > 2)) errs.push(`${name}: at most two points per bar (a step)`);
       if (Math.max(...bars) > r.bars || Math.min(...bars) < 0) errs.push(`${name}: point outside 0..bars`);
       if (l.points.some((p) => !(p[1] >= 0 && p[1] <= 1))) errs.push(`${name}: values must be 0..1`);
+      if (l.control === "key" && l.deck !== "in") errs.push(`${name}: only the incoming deck's key is shifted by a recipe`);
       if (l.control === "tempo") {
         if (l.deck !== "out") errs.push(`${name}: only the outgoing deck's tempo can be automated`);
         if (bars.some((b, i) => i > 0 && b === bars[i - 1])) errs.push(`${name}: tempo lanes ramp; they can't step`);

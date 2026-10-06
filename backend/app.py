@@ -24,6 +24,7 @@ sys.path.insert(0, str(ROOT / "pipeline"))
 from handoff_pipeline.compose.composer import Composer, load_api_key  # noqa: E402
 from handoff_pipeline.compose.facts import load_track  # noqa: E402
 from plan_transitions import SCHEMA, TRANSITIONS_VERSION, load_saved, merge_pair, plan_pair  # noqa: E402
+from handoff_pipeline.compose.concepts import History  # noqa: E402
 
 
 REFINE_ROUNDS = 2   # draft `candidates` ideas, keep the strongest, revise it up to twice; one transition comes back
@@ -41,9 +42,11 @@ class ComposeRequest(BaseModel):
     brief: str = Field(default="Creative, energetic, track-specific transitions", max_length=500)
 
 
-def create_app(library: Path = ROOT / "web/public/library", composer: Composer | None = None) -> FastAPI:
+def create_app(library: Path = ROOT / "web/public/library", composer: Composer | None = None,
+               history: History | None = None) -> FastAPI:
     api = FastAPI(title="Handoff composer", version="1.0.0")
     comp = composer or Composer(ROOT / "pipeline/cache/compose")
+    memory = history or History(ROOT / "pipeline/cache/composer_history.jsonl")   # what not to repeat
     lock = Lock()  # bound paid work and serialize the library/cache writer
 
     @api.post("/api/composer/compose")
@@ -64,7 +67,7 @@ def create_app(library: Path = ROOT / "web/public/library", composer: Composer |
         try:
             a, b = (load_track(p) for p in paths)
             options = body.model_dump(exclude={"schema_version", "out_track", "in_track", "candidates"})
-            pair = plan_pair(a, b, "llm", comp, body.candidates, REFINE_ROUNDS, **options)
+            pair = plan_pair(a, b, "llm", comp, body.candidates, REFINE_ROUNDS, memory, **options)
             if pair["composer"] and pair["composer"].get("error"):
                 raise HTTPException(502, pair["composer"]["error"])
             doc = {"schema_version": TRANSITIONS_VERSION, "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),

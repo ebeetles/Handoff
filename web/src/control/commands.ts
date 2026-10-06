@@ -6,7 +6,9 @@ export type Command =
   | { type: "togglePlay"; deck: DeckId }
   | { type: "cue"; deck: DeckId }
   | { type: "sync"; deck: DeckId }
-  | { type: "loop"; deck: DeckId; beats: number }   // same size again = exit loop
+  | { type: "loop"; deck: DeckId; beats: number; slip?: boolean }   // same size again = exit loop. slip (automation): the
+                                                                    // deck's clock runs on through the loop, leaving lands back in
+                                                                    // time, and the start always snaps to the grid
   | { type: "jump"; deck: DeckId; beats: number }
   | { type: "seekFraction"; deck: DeckId; fraction: number }
   | { type: "load"; deck: DeckId; trackId: string }
@@ -15,7 +17,8 @@ export type Command =
   | { type: "pause"; deck: DeckId }                     // explicit (togglePlay would start a paused deck)
   | { type: "loopOff"; deck: DeckId }                   // explicit exit (loop with the same beats toggles)
   | { type: "setControlAt"; control: ControlId; value: number; at: number }   // exact-time step; the store follows at `at`
-  | { type: "brakeAt"; deck: DeckId; at: number; beats: number };            // turntable stop over `beats` beats from `at` (then pause it)
+  | { type: "brakeAt"; deck: DeckId; at: number; beats: number }
+  | { type: "keyShift"; deck: DeckId; semitones: number };   // nudge the deck's key shift by this many semitones (-6..+6 overall)            // turntable stop over `beats` beats from `at` (then pause it)
 
 export type CommandHandler = (cmd: Command) => void;
 

@@ -7,8 +7,8 @@ import { CommandBus } from "../control/commands";
 import { ControlStore, DECKS, deckControl, type ControlId, type ControlSource, type DeckId } from "../control/controls";
 import { Deck, ECHO_BEATS, type LoadedTrack, type SourceKey } from "./deck";
 import { BeatGrid, loopRange } from "./grid";
-import { masterGain, rateToTempo, tempoRate, xfadeGains } from "./mapping";
-import { alignedLaunchBar, barPhaseDelta, chooseSync, frac } from "./sync";
+import { keySemitones, keyValue, masterGain, rateToTempo, tempoRate, xfadeGains } from "./mapping";
+import { alignedLaunchBar, barPhaseDelta, chooseSync, frac, transposeCamelot } from "./sync";
 import { ctxTimeAt, positionAt, reanchor } from "./transport";
 
 export interface DeckSnapshot {
@@ -41,13 +41,17 @@ export interface DeckSnapshot {
   synced: boolean;
   hasStems: boolean;
   beatmatchable: boolean;
+  /** Semitones the deck is heard shifted from its own key: the key shift with key lock on, or
+   *  the tempo's pitch change with it off. heardCamelot is the key it is heard in. */
+  pitchSemitones: number;
+  heardCamelot: string;
 }
 
 const EMPTY: DeckSnapshot = {
   loaded: false, trackId: "", loading: null, error: null, title: "", artist: "", camelot: "", keyName: "", duration: 0,
   position: 0, playing: false, pending: false, rate: 1, trackBpm: 0, bpm: 0, barPos: 0, beatInBar: 0,
   phraseIndex: 0, phraseCount: 0, phraseBars: 16, barInPhrase: 0, barsToNextPhrase: 0, sectionLabel: "", loop: null, cue: 0,
-  level: 0, synced: false, hasStems: false, beatmatchable: true,
+  level: 0, synced: false, hasStems: false, beatmatchable: true, pitchSemitones: 0, heardCamelot: "",
 };
 
 export class AudioEngine {
@@ -69,7 +73,7 @@ export class AudioEngine {
     this.master.connect(limiter).connect(ctx.destination);
     this.decks = { A: new Deck(ctx, "A"), B: new Deck(ctx, "B") };
     for (const d of DECKS) {
-      this.decks[d].output.connect(this.master);
+      this.decks[d].out.connect(this.master);
       this.decks[d].fxOut.connect(this.master);
     }
 
@@ -99,8 +103,8 @@ export class AudioEngine {
   // ------------------------------------------------------------ controls -> audio
 
   private applyAll(): void {
-    const ids: ControlId[] = ["xfader", "master"];
-    for (const d of DECKS) for (const c of ["eqHigh", "eqMid", "eqLow", "filter", "volume", "tempo", "echo"] as const) ids.push(deckControl(d, c));
+    const ids: ControlId[] = ["xfader", "master", "keyLock"];
+    for (const d of DECKS) for (const c of ["eqHigh", "eqMid", "eqLow", "filter", "volume", "tempo", "echo", "key"] as const) ids.push(deckControl(d, c));
     ids.forEach((id) => this.applyControl(id, this.store.get(id), "engine"));
   }
 
@@ -114,6 +118,8 @@ export class AudioEngine {
       return;
     }
     if (id === "quantize") return;
+    // Key lock is all-or-nothing: it adds the key stage's latency, which both decks must share.
+    if (id === "keyLock") return DECKS.forEach((d) => this.decks[d].setKeyLock(v > 0.5, at));
     const [d, ...rest] = id.split(".") as [DeckId, ...string[]];
     const deck = this.decks[d];
     const c = rest.join(".");
@@ -124,6 +130,7 @@ export class AudioEngine {
       case "filter": return deck.setFilter(v, at);
       case "volume": return deck.setVolume(v, at);
       case "echo": return deck.setEcho(v, at);
+      case "key": return deck.setKeyShift(keySemitones(v), at);
       case "tempo":
         deck.setRate(tempoRate(v));
         this.updateEchoTime(deck);
@@ -143,6 +150,13 @@ export class AudioEngine {
 
   // ------------------------------------------------------------ commands
 
+  /** "ready" once both decks' key stages run; "unavailable" if either failed (key lock then
+   *  only keeps the decks' timing, not their key). */
+  async keyLockStatus(): Promise<"ready" | "unavailable"> {
+    await Promise.all(DECKS.map((d) => this.decks[d].key.ready));
+    return DECKS.some((d) => this.decks[d].key.error) ? "unavailable" : "ready";
+  }
+
   private async handle(cmd: Command): Promise<void> {
     this.resume();
     if (cmd.type === "setControlAt") return this.setControlAt(cmd.control, cmd.value, cmd.at);
@@ -150,13 +164,17 @@ export class AudioEngine {
     switch (cmd.type) {
       case "playAt": return this.playAt(deck, cmd.at, cmd.fromBar);
       case "brakeAt": return this.brakeAt(deck, cmd.at, cmd.beats);
+      case "keyShift": {
+        const id = deckControl(cmd.deck, "key");
+        return this.store.set(id, keyValue(keySemitones(this.store.get(id)) + cmd.semitones), "engine");
+      }
       case "pause": return deck.pause();
       case "loopOff": return deck.anchor.loop ? this.exitLoop(deck) : undefined;
       case "load": return this.load(cmd.deck, cmd.trackId);
       case "togglePlay": return deck.playing ? deck.pause() : this.launch(cmd.deck);
       case "cue": return this.cue(deck);
       case "sync": return this.sync(cmd.deck);
-      case "loop": return this.loop(deck, cmd.beats);
+      case "loop": return this.loop(deck, cmd.beats, cmd.slip ?? false);
       case "jump": return this.jump(deck, cmd.beats);
       case "seekFraction": return this.seekFraction(deck, cmd.fraction);
     }
@@ -298,15 +316,16 @@ export class AudioEngine {
     return t.analysis.phrases.find((p) => p.start_bar >= bar + minBarsAhead)?.start_bar ?? null;
   }
 
-  private loop(deck: Deck, beats: number): void {
+  private loop(deck: Deck, beats: number, slip = false): void {
     if (!deck.track) return;
     if (deck.anchor.loop?.beats === beats) return this.exitLoop(deck);
-    const { start, end } = loopRange(deck.track.grid, deck.position(), beats, this.quantize);
+    const { start, end } = loopRange(deck.track.grid, deck.position(), beats, this.quantize || slip);
     if (end > deck.track.analysis.duration_s) return this.say("Not enough track left for that loop.");
     // A roll (under a beat) slips: keep a clock of where playback would be without it, so
     // leaving the roll lands back in time. A fractional loop otherwise exits off the beat
     // (it advances a fraction of a beat per pass), which breaks sync with the other deck.
-    if (beats < 1) deck.slip ??= deck.playing ? reanchor(deck.anchor, this.ctx.currentTime, { loop: null }) : null;
+    // Automation asks for the same on longer loops (a held hook): its bar clock must keep running.
+    if (beats < 1 || slip) deck.slip ??= deck.playing ? reanchor(deck.anchor, this.ctx.currentTime, { loop: null }) : null;
     else deck.slip = null;
     deck.setLoop({ start, end, beats });
   }
@@ -415,6 +434,11 @@ export class AudioEngine {
       loop: deck.anchor.loop ? { beats: deck.anchor.loop.beats } : null,
       cue: deck.cuePos, level: deck.level(), synced: deck.synced, hasStems: deck.hasStems,
       beatmatchable: a.tempo.beatmatchable,
+      ...((): { pitchSemitones: number; heardCamelot: string } => {
+        const locked = this.store.get("keyLock") > 0.5;
+        const semis = locked ? deck.keyShift : 12 * Math.log2(rate);
+        return { pitchSemitones: semis, heardCamelot: transposeCamelot(a.key.camelot, Math.round(semis)) };
+      })(),
     };
   }
 }

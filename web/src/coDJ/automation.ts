@@ -9,6 +9,7 @@
 //   - A brake is scheduled for its exact time too (brakeAt).
 //   - A tempo ride (the outgoing deck's tempo lane) is a ramp from wherever that deck's tempo is.
 //     The incoming deck then syncs as it comes in, to the tempo the ride arrived at.
+//   - Loops (rolls, held hooks) slip: the outgoing deck's bar clock runs on through them.
 //   - Other events (pause, loop, loop_off) fire on the first tick at or after their bar. The
 //     engine snaps loops to the grid, so landing a few ms late is right, and early would be wrong.
 // Bars are counted on the OUTGOING deck's grid from the transition's start (a phrase boundary);
@@ -169,7 +170,7 @@ export class AutomationPlayer {
           : e.command === "brake" ? { type: "brakeAt", deck, at: t, beats: e.beats }
           : e.command === "pause" ? { type: "pause", deck }
           : e.command === "loop_off" ? { type: "loopOff", deck }
-          : { type: "loop", deck, beats: e.beats });
+          : { type: "loop", deck, beats: e.beats, slip: true });
       }
     }
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "handoff/recipe/v3",
+  "$id": "handoff/recipe/v4",
   "title": "Recipe",
   "description": "A transition, authored by hand: lanes of breakpoints and timed events, in bars from the transition start (a phrase boundary on the outgoing deck). Hand-authored presets (contracts/recipes/) or compiled per pair by the Chunk 7 composer (then anchored). Read by web/src/coDJ (automation player) and the planner. Bump schema_version on any breaking change and update both readers.",
   "type": "object",
@@ -17,7 +17,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": 3
+      "const": 4
     },
     "id": {
       "type": "string",
@@ -137,9 +137,10 @@
               "stem.vocals",
               "stem.other",
               "xfader",
-              "tempo"
+              "tempo",
+              "key"
             ],
-            "description": "tempo (outgoing deck only, ramps only, no steps): the tempo fader, 0..1 = -8%..+8%. Before its first change the player keeps the deck's current tempo, so a ride starts from wherever the deck is."
+            "description": "tempo (outgoing deck only, ramps only, no steps): the tempo fader, 0..1 = -8%..+8%. Before its first change the player keeps the deck's current tempo, so a ride starts from wherever the deck is. key (incoming deck only): the key shift, 0.5 = none, +-1/12 per semitone; set before the deck comes in, and kept afterwards."
           },
           "points": {
             "type": "array",

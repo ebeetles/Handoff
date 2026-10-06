@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "generated_at": "2026-10-05T00:00:00+00:00",
   "pairs": [
     {
@@ -26,12 +26,34 @@
           "in": "9B",
           "distance": 1,
           "compatible": true,
-          "when_locked": {
-            "semitones": -0.55,
-            "in_sounds_as": "9B",
-            "distance": 1,
-            "detune_cents": -55
-          }
+          "shift_options": [
+            {
+              "in_key_shift": -2,
+              "in_sounds_as": "7B",
+              "distance": 1
+            },
+            {
+              "in_key_shift": -1,
+              "in_sounds_as": "2B",
+              "distance": 6
+            },
+            {
+              "in_key_shift": 0,
+              "in_sounds_as": "9B",
+              "distance": 1
+            },
+            {
+              "in_key_shift": 1,
+              "in_sounds_as": "4B",
+              "distance": 4
+            },
+            {
+              "in_key_shift": 2,
+              "in_sounds_as": "11B",
+              "distance": 3
+            }
+          ],
+          "best_in_key_shift": 0
         },
         "stems": {
           "out": true,
@@ -123,7 +145,7 @@
           },
           "errors": [],
           "recipe": {
-            "schema_version": 3,
+            "schema_version": 4,
             "id": "fixture_midtrack_relay",
             "name": "Mid-track chopped relay",
             "description": "A rhythmic percussion handoff at A's early phrase into B's middle phrase.",
@@ -490,27 +512,26 @@
           },
           "critic": {
             "valid": true,
-            "score": 84.6,
+            "score": 90.7,
             "breakdown": {
-              "key_clash": -3.38
+              "clean_blend": 2.69
             },
             "measures": {
               "bass_clash_bars": 0.0,
               "vocal_clash_bars": 0.0,
-              "key_clash_bars": 1.69,
+              "key_clash_bars": 0.0,
               "rhythm_clash_bars": 0.0,
-              "ride_tonal_bars": 0.0,
               "dip_bars": 0.0,
               "spike_bars": 0.0,
               "overlap_bars": 5.38,
-              "clean_overlap_bars": 0.88,
+              "clean_overlap_bars": 5.38,
               "locked": true,
               "vocals_known": true
             },
             "reasons": [
-              "The keys (8B, 9B (B sounds -0.5 semitones off its key at this tempo)) clash while both melodies are up."
+              "The two tracks blend cleanly for 5.375 bars."
             ],
-            "worst": "key_clash"
+            "worst": null
           }
         }
       ]

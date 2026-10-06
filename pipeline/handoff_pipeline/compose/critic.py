@@ -12,9 +12,9 @@ stem->band profile). That gives per-deck band presence and total loudness, from 
                 filter, fader and crossfader do (they take the kick with it, as on a real mixer).
   vocal clash   both decks voiced and audible at once       (only when vocals are known)
   key clash     both decks' pitched parts (bass, other, vocals; drums have no key) audible at once,
-                weighted by how far apart the keys sound. The board has no key lock, so a locked
-                deck is transposed by its tempo change: the keys are compared as heard, with any
-                detune (mix.tonal_clash). Without stems, the mid band stands in for pitched parts.
+                weighted by how far apart the keys are. The board has key lock: tempo doesn't move
+                pitch, so the keys meet as written, B transposed by the plan's key shift
+                (mix.tonal_clash). Without stems, the mid band stands in for pitched parts.
   rhythm clash  when the decks aren't beatmatched (tempos can't lock, or the plan doesn't sync):
                 both decks' rhythmic parts (drums, bass, half of "other") audible at once. One bar
                 of it is a train wreck, and the plan is invalid. A beat under a beatless breakdown,
@@ -22,10 +22,10 @@ stem->band profile). That gives per-deck band presence and total loudness, from 
   dip / spike   total loudness falls > 6 dB below, or rises > 3 dB above, the two tracks' own levels
   structure     A exits from a calm/outro phrase, B enters on a phrase start, energy carries on,
                 overlap not endless, the plan not overstuffed, tempo stretch small
+  drop lands    B's drop (a TrackAnalysis v4 cue) hits while B is fully in: the payoff of a transition
   clean blend   credit per bar both decks are heard together with no clash (up to 16 bars). Without
                 it, never overlapping was the safest score: on the real library an echo out won
                 172 of 240 pairs, so any blend lost to a cut.
-  tempo ride    sliding A's pitch while its melody plays (a ride under drums-only bars is free)
   validity      no rhythm clash; without stems, any unlocked overlap
 
 Deterministic and cheap: it scores many candidates and explains itself (reasons) for the UI and
@@ -38,7 +38,7 @@ import math
 import numpy as np
 
 from .facts import TrackData
-from .mix import (DEFAULTS, choose_sync, eq_db, filter_params, lane_value_at, pitch_offset, tempo_rate, tonal_clash,
+from .mix import (DEFAULTS, choose_sync, eq_db, filter_params, lane_value_at, tempo_rate, tonal_clash,
                   volume_gain, xfade_gains)
 
 BANDS = ("low", "mid", "high")
@@ -48,8 +48,8 @@ STEM_BANDS = {"drums": (0.45, 0.2, 0.6), "bass": (0.55, 0.15, 0.05), "vocals": (
 STEP = 0.125  # half-beat volume gates need both halves represented
 STRONG = 0.3      # band presence that counts as "there"
 RHYTHM = {"drums": 1.0, "bass": 0.7, "other": 0.5}   # how rhythmic each stem is, for unlocked overlaps
-W = {"bass_clash": 4.0, "vocal_clash": 3.0, "key_clash": 2.0, "ride_pitch": 0.5, "dip": 3.0, "spike": 2.0, "mid_phrase_entry": 5.0,
-     "energy_drop": 6.0, "long_overlap": 0.5, "complexity": 2.0, "stretch": 4.0, "calm_exit": 4.0, "clean_blend": 0.5}
+W = {"drop_lands": 3.0, "bass_clash": 4.0, "vocal_clash": 3.0, "key_clash": 2.0, "dip": 3.0, "spike": 2.0, "mid_phrase_entry": 5.0,
+     "energy_drop": 6.0, "long_overlap": 0.5, "complexity": 2.0, "stretch": 2.0, "calm_exit": 4.0, "clean_blend": 0.5}
 BASE = 88.0          # bonuses (up to +12) need headroom below the 100 cap
 CLEAN_BLEND_MAX = 16  # bars of clean overlap that earn credit
 
@@ -108,27 +108,32 @@ def critique(recipe: dict, a: TrackData, b: TrackData, n_moves: int = 0) -> dict
     anc, length = recipe["anchor"], recipe["bars"]
     start, fb = anc["out_start_bar"], anc["in_from_bar"]
     enter = next(e["at_bar"] for e in recipe["events"] if e["deck"] == "in" and e["command"] == "play")
-    rolls = []
-    roll_start = None
+    # A's loops, as (start, end, length in bars): a roll (under a beat) holds its first bar; a held
+    # loop (loop_hold) cycles through its bars.
+    loops = []
+    opened = None
     for e in recipe["events"]:
-        if e["command"] == "loop" and roll_start is None:
-            roll_start = e["at_bar"]
-        elif e["command"] == "loop_off" and roll_start is not None:
-            rolls.append((roll_start, e["at_bar"]))
-            roll_start = None
-    if roll_start is not None:
-        rolls.append((roll_start, length))
+        if e["command"] == "loop" and opened is None:
+            opened = (e["at_bar"], e["beats"] / 4)
+        elif e["command"] == "loop_off" and opened is not None:
+            loops.append((opened[0], e["at_bar"], opened[1]))
+            opened = None
+    if opened is not None:
+        loops.append((opened[0], length, opened[1]))
     xf = _lane(recipe, None, "xfader")
     rate_a = lambda x: tempo_rate(_lane(recipe, "out", "tempo")(x))   # noqa: E731  (A's ride; 1 = its own tempo)
     locked = recipe["requires"]["beatmatchable"]
     sync = choose_sync(b.bpm, a.bpm * rate_a(enter)) if a.beatmatchable and b.beatmatchable else None
     rate_b = sync[1] if locked and sync else 1.0
+    # Key lock: tempo doesn't move pitch, so the keys meet as written, B transposed by its key lane.
+    shift = round((_lane(recipe, "in", "key")(0) - 0.5) * 12)
     m = {"bass_clash_bars": 0.0, "vocal_clash_bars": 0.0, "key_clash_bars": 0.0, "rhythm_clash_bars": 0.0,
-         "ride_tonal_bars": 0.0, "dip_bars": 0.0, "spike_bars": 0.0, "overlap_bars": 0.0, "clean_overlap_bars": 0.0,
+         "dip_bars": 0.0, "spike_bars": 0.0, "overlap_bars": 0.0, "clean_overlap_bars": 0.0,
          "locked": locked, "vocals_known": a.vocals is not None and b.vocals is not None}
     where: dict[str, list[float]] = {k: [] for k in ("bass_clash", "vocal_clash", "key_clash", "rhythm_clash", "dip", "spike")}
-    ride = [p[0] for p in next((l["points"] for l in recipe["lanes"] if l["deck"] == "out" and l["control"] == "tempo"), [])]
-    ride_span = (min(ride), max(ride)) if ride else None
+    # B's drops (TrackAnalysis v4 cues), in transition bars, and whether B is fully in when one hits.
+    b_drops = [enter + c["bar"] - fb for c in b.cues if c["kind"] == "drop" and enter <= enter + c["bar"] - fb < length]
+    landed = None
     ref_a = float(np.median(a.rms_db[max(0, start - 4):start + 1]))
     end_b = min(b.n_bars - 1, fb + int(length - enter))
     ref_b = float(np.median(b.rms_db[end_b:end_b + 4]))
@@ -138,13 +143,12 @@ def critique(recipe: dict, a: TrackData, b: TrackData, n_moves: int = 0) -> dict
     x = 0.0
     while x < length:
         g_out, g_in = xfade_gains(xf(x))
-        ia = start + int(next((s for s, e in rolls if s <= x < e), x))
+        held = next(((s, n) for s, e, n in loops if s <= x < e), None)
+        ia = start + int(x if held is None else held[0] + (x - held[0]) % max(held[1], 1))
         ia = min(ia, a.n_bars - 1)
         sa = _deck_state(recipe, "out", x, g_out, a.has_stems)
         pa = {k: float(getattr(a, k)[ia]) * sa["bands"][k] for k in BANDS}
         tonal_a, rhythm_a = _parts(a, ia, sa, pa)
-        if ride_span and ride_span[0] <= x < ride_span[1] and tonal_a > STRONG:
-            m["ride_tonal_bars"] += STEP
         power = 10 ** (a.rms_db[ia] / 10) * float(np.mean([sa["bands"][k] ** 2 for k in BANDS]))
         # Echo tail: what was sent keeps ringing, each 3/4-beat repeat 0.45x (about -7 dB).
         send = _lane(recipe, "out", "echo")(x)
@@ -171,9 +175,12 @@ def critique(recipe: dict, a: TrackData, b: TrackData, n_moves: int = 0) -> dict
                 where["vocal_clash"].append(x)
                 clash = True
             tonal_b, rhythm_b = _parts(b, ib, sb, pb)
+            full = sb["bass_gain"] >= 0.6 and sb["stem_gain"]["drums"] >= 0.6      # B's drums and bass, through its path
+            if landed is None and full and any(abs(x - d) < STEP / 2 for d in b_drops):
+                landed = x
             pitched = STRONG if a.presence is not None and b.presence is not None else 0.25
             if tonal_a > pitched and tonal_b > pitched:
-                unit = tonal_clash(a.camelot, b.camelot, pitch_offset(rate_a(x), rate_b))
+                unit = tonal_clash(a.camelot, b.camelot, shift)
                 if unit > 0:
                     m["key_clash_bars"] += STEP * unit
                     where["key_clash"].append(x)
@@ -210,13 +217,8 @@ def critique(recipe: dict, a: TrackData, b: TrackData, n_moves: int = 0) -> dict
         reasons.append(f"Two vocals overlap for {m['vocal_clash_bars']:g} bars{_at(where['vocal_clash'])}.")
     if m["key_clash_bars"]:
         pen["key_clash"] = W["key_clash"] * m["key_clash_bars"]
-        semis = pitch_offset(rate_a(enter), rate_b)
-        heard = f" (B sounds {semis:+.1f} semitones off its key at this tempo)" if abs(semis) > 0.2 else ""
+        heard = f" (B shifted {shift:+d})" if shift else ""
         reasons.append(f"The keys ({a.camelot}, {b.camelot}{heard}) clash while both melodies are up{_at(where['key_clash'])}.")
-    if m["ride_tonal_bars"]:
-        semis = abs(pitch_offset(1.0, rate_a(ride_span[1])))
-        pen["ride_pitch"] = W["ride_pitch"] * semis * m["ride_tonal_bars"]
-        reasons.append(f"A's melody slides {semis:.1f} semitones during the tempo ride.")
     if m["dip_bars"] > 1:
         pen["dip"] = W["dip"] * (m["dip_bars"] - 1)
         reasons.append(f"The level drops away for {m['dip_bars']:g} bars{_at(where['dip'])}.")
@@ -239,10 +241,13 @@ def critique(recipe: dict, a: TrackData, b: TrackData, n_moves: int = 0) -> dict
         reasons.append(f"{n_moves} moves is a lot to follow.")
     if locked and abs(rate_b - 1) > 0.06:
         pen["stretch"] = W["stretch"]
-        reasons.append(f"B is stretched {abs(rate_b - 1) * 100:.0f}%, which shifts its pitch.")
+        reasons.append(f"B plays {abs(rate_b - 1) * 100:.0f}% off its own tempo (key lock keeps its pitch; the feel changes).")
     bonus = {}
+    if landed is not None:
+        bonus["drop_lands"] = W["drop_lands"]
+        reasons.append(f"B's drop lands in full during the transition (bar {landed:g}).")
     section = a.sections[next(p["section_index"] for p in a.phrases if p["start_bar"] == start)]
-    if section["label"] in ("outro", "break") or section["energy_level"] == "low":
+    if section["label"] in ("outro", "breakdown") or section["energy_level"] == "low":
         bonus["calm_exit"] = W["calm_exit"]
         reasons.append(f"A leaves from its {section['label']} ({section['energy_level']} energy).")
     if m["clean_overlap_bars"] >= 1:

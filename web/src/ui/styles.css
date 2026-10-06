@@ -272,3 +272,8 @@ button { font: inherit; color: inherit; }
 .composer-message { white-space: normal; font-size: 14px; }
 .transition-details { position: relative; font-size: 12px; max-width: 60ch; text-align: center; }
 .transition-details[open] { position: absolute; top: 90px; background: var(--panel); border: 1px solid var(--rule); padding: 12px; z-index: 20; }
+
+/* Key: the heard key, and -/+ for a key shift (rarely used, so small) */
+.key-readout { display: flex; flex-direction: column; }
+.key-shift { display: inline-flex; gap: 6px; margin-top: 4px; }
+.key-shift .pad.small { min-height: 26px; min-width: 30px; padding: 0 8px; font-size: 16px; }

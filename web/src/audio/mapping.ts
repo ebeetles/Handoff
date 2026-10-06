@@ -40,3 +40,7 @@ export function xfadeGains(x: number): { a: number; b: number } {
 
 export const tempoRate = (v: number) => 1 + (clamp01(v) - 0.5) * 2 * TEMPO_RANGE;
 export const rateToTempo = (rate: number) => clamp01((rate - 1) / (2 * TEMPO_RANGE) + 0.5);
+
+/** Key control (0..1) -> whole semitones, -6..+6 (0.5 = no shift). */
+export const keySemitones = (v: number) => Math.round((clamp01(v) - 0.5) * 12);
+export const keyValue = (semitones: number) => clamp01(0.5 + semitones / 12);

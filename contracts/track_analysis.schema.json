@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "handoff/track_analysis/v3",
+  "$id": "handoff/track_analysis/v4",
   "title": "TrackAnalysis",
   "description": "Per-track analysis written by pipeline/ and read by web/. Bump schema_version on any breaking change and update BOTH sides plus contracts/fixtures/.",
   "type": "object",
@@ -22,6 +22,8 @@
     "phrase_bars",
     "phrases",
     "sections",
+    "cues",
+    "hooks",
     "key",
     "waveform",
     "meta"
@@ -29,7 +31,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": 3
+      "const": 4
     },
     "id": {
       "type": "string",
@@ -245,6 +247,39 @@
           "rms_db": {
             "type": "number",
             "description": "Absolute bar loudness in dBFS, comparable across tracks."
+          },
+          "stems": {
+            "type": "object",
+            "required": [
+              "drums",
+              "bass",
+              "vocals",
+              "other"
+            ],
+            "additionalProperties": false,
+            "description": "Only when the track has stems: each stem's level against the mix in this bar, 0 (-24 dB or less) to 1 (-14 dB or more).",
+            "properties": {
+              "drums": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "bass": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "vocals": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "other": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
           }
         }
       }
@@ -299,7 +334,9 @@
           "end_bar",
           "start_s",
           "label",
-          "energy_level"
+          "energy_level",
+          "vocals",
+          "group"
         ],
         "additionalProperties": false,
         "properties": {
@@ -322,10 +359,15 @@
           "label": {
             "enum": [
               "intro",
+              "verse",
+              "build",
+              "drop",
+              "chorus",
+              "breakdown",
               "main",
-              "break",
               "outro"
-            ]
+            ],
+            "description": "intro/outro: quieter first/last section. build: rising into a peak. drop: a peak after a build, breakdown or energy jump. chorus: a sung peak that recurs. breakdown: the drums drop out. verse: sung, below peak. main: anything else. Rule-based (pipeline/handoff_pipeline/structure.py)."
           },
           "energy_level": {
             "enum": [
@@ -333,6 +375,20 @@
               "mid",
               "high"
             ]
+          },
+          "vocals": {
+            "enum": [
+              "none",
+              "some",
+              "lots",
+              "unknown"
+            ],
+            "description": "Vocal stem presence over the section; unknown without stems."
+          },
+          "group": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Repetition class: sections that sound alike share a group, numbered in order of first appearance."
           }
         }
       }
@@ -381,6 +437,78 @@
         },
         "overrides_applied": {
           "type": "object"
+        }
+      }
+    },
+    "cues": {
+      "type": "array",
+      "description": "Moments, in bars: where a drop or chorus hits (drop), the rising bars before it (build), breakdowns, and where vocals enter or stop.",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "bar",
+          "bars"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "drop",
+              "build",
+              "breakdown",
+              "vocal_in",
+              "vocal_out"
+            ]
+          },
+          "bar": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "bars": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "hooks": {
+      "type": "array",
+      "description": "The most repeated 2- or 4-bar phrase of the vocal stem (vocal) and the other stem (instrumental), with every bar it starts at (non-overlapping). Empty if nothing repeats 3 times.",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "bars",
+          "starts",
+          "strength"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "vocal",
+              "instrumental"
+            ]
+          },
+          "bars": {
+            "enum": [
+              2,
+              4
+            ]
+          },
+          "starts": {
+            "type": "array",
+            "minItems": 3,
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "strength": {
+            "type": "number",
+            "description": "Mean similarity of the repeats (0..1)."
+          }
         }
       }
     }

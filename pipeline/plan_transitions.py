@@ -13,6 +13,7 @@ from ANTHROPIC_API_KEY or pipeline/.env.
 """
 import argparse
 import hashlib
+import random
 from collections.abc import Callable
 import json
 import sys
@@ -24,12 +25,13 @@ import jsonschema
 
 from handoff_pipeline.compose.compiler import compile_plan
 from handoff_pipeline.compose.composer import DEFAULT_MODEL, Composer
+from handoff_pipeline.compose.concepts import NOVELTY_WEIGHT, History, draw, similarity
 from handoff_pipeline.compose.critic import critique
 from handoff_pipeline.compose.facts import load_track, pair_facts
 from handoff_pipeline.compose.rules_composer import compose_rules
 
 HERE = Path(__file__).resolve().parent
-TRANSITIONS_VERSION = 3
+TRANSITIONS_VERSION = 4
 SCHEMA = json.loads((HERE.parent / "contracts" / "transitions.schema.json").read_text())
 # $ per million tokens: input, output, cache write (5 min), cache read. Opus 5.5 list prices.
 PRICES = {"claude-opus-5-5": (4.0, 20.0, 5.0, 0.2)}
@@ -49,17 +51,36 @@ GOOD_SCORE = 95   # a refined transition stops early at this score, or with no f
 UNAVOIDABLE = {"stretch": "comes from the two tempos: once locked, B must play this far off its own tempo"}
 
 
-def plan_pair(a, b, composer_kind: str, composer: Composer | None, n: int, refine: int = 0, **options) -> dict:
+def plan_pair(a, b, composer_kind: str, composer: Composer | None, n: int, refine: int = 0,
+              history: History | None = None, rng: random.Random | None = None, **options) -> dict:
     """Candidates for one pair. With refine > 0 the LLM's best idea is revised up to `refine`
     times, with the compiler's errors and the critic's findings as feedback, and only the best
-    version is kept: one transition, worked on until it's good."""
+    version is kept: one transition, worked on until it's good.
+
+    With a History, each draft gets its own concept card (concepts.draw), the composer sees its
+    recent work, the draft to refine is chosen with a novelty bonus, and the kept transition is
+    added to the history."""
     out = _candidates([("rules", c) for c in compose_rules(a, b)], a, b, options) if composer_kind in ("rules", "both") else []
     meta = None
     if composer_kind in ("llm", "both") and composer:
+        recent = history.recent() if history else []
+        if history:
+            options = {**options, "concepts": draw(a, b, n, recent, rng), "recent": recent}
         cands, meta = composer.compose(a, b, n, **options)
         llm = _candidates([("llm", c) for c in cands], a, b, options)
+        for i, c in enumerate(llm):
+            c["_concept"] = options["concepts"][i]["id"] if history and i < len(options["concepts"]) else None
+            c["_novelty"] = 1 - similarity(c["plan"]["moves"], recent)
         if refine and llm:
             llm, meta = _refine(a, b, composer, llm, meta, refine, options)
+        if history and meta and llm:
+            kept = max(llm, key=_rank)
+            meta = {**meta, "concepts": [c["id"] for c in options["concepts"]], "kept_concept": kept.get("_concept")}
+            if _rank(kept) >= 0:
+                history.add((a.id, b.id), kept, kept.get("_concept"))
+        for c in llm:
+            c.pop("_concept", None)
+            c.pop("_novelty", None)
         out += llm
     return _pair(a, b, out, meta)
 
@@ -90,8 +111,16 @@ def feedback(c: dict) -> dict:
             "unavoidable": {k: UNAVOIDABLE[k] for k, x in v["breakdown"].items() if x < 0 and k in UNAVOIDABLE}}
 
 
+def _pick(c: dict) -> float:
+    """Which draft to refine: the critic's score, less NOVELTY_WEIGHT for each unit of similarity
+    to recent work (the critic alone keeps choosing the same safe formula)."""
+    return _rank(c) - (NOVELTY_WEIGHT * (1 - c.get("_novelty", 1.0)) if _rank(c) >= 0 else 0)
+
+
 def _refine(a, b, composer: Composer, llm: list[dict], meta: dict, rounds: int, options: dict) -> tuple[list[dict], dict]:
-    cur = max(llm, key=_rank)
+    cur = max(llm, key=_pick)
+    if options.get("concepts") is not None:   # a revision works on one transition: only its concept
+        options = {**options, "concepts": [c for c in options["concepts"] if c["id"] == cur.get("_concept")]}
     versions, history = [cur], []
     log = [{"round": 0, "score": cur["critic"]["score"] if cur["critic"] else None, "valid": _rank(cur) >= 0,
             "issues": len(cur["errors"]) + len(feedback(cur).get("penalties", {}))}]
@@ -109,7 +138,7 @@ def _refine(a, b, composer: Composer, llm: list[dict], meta: dict, rounds: int, 
         if m.get("error") or not cands:
             log.append({"round": r, "error": m.get("error") or "no candidate"})
             break
-        cur = _candidates([("llm", cands[0])], a, b, options)[0]
+        cur = {**_candidates([("llm", cands[0])], a, b, options)[0], "_concept": versions[0].get("_concept")}
         versions.append(cur)
         log.append({"round": r, "score": cur["critic"]["score"] if cur["critic"] else None, "valid": _rank(cur) >= 0,
                     "issues": len(cur["errors"]) + len(feedback(cur).get("penalties", {}))})
@@ -175,7 +204,8 @@ def _candidates(raw: list[tuple[str, dict]], a, b, options: dict) -> list[dict]:
                 recipe = None
         verdict = critique(recipe, a, b, len(c.get("moves", []))) if recipe else None
         out.append({"id": rid, "source": source, "idea": c.get("idea", ""), "rationale": c.get("rationale", ""),
-                    "plan": {"out_start_bar": c.get("out_start_bar"), "moves": c.get("moves", [])},
+                    "plan": {"out_start_bar": c.get("out_start_bar"),
+                             **({"in_key_shift": c["in_key_shift"]} if "in_key_shift" in c else {}), "moves": c.get("moves", [])},
                     "errors": errors, "recipe": recipe, "critic": verdict})
     return out
 
@@ -195,6 +225,7 @@ def main() -> None:
     ap.add_argument("--out-start-bar", type=int, help="compose for this exact phrase, including mid-track")
     ap.add_argument("--min-start-bar", type=int, default=0, help="ignore exits before this bar")
     ap.add_argument("--max-bars", type=int, default=32, help="maximum transition duration (4..32 bars)")
+    ap.add_argument("--seed", type=int, help="seed the concept draw (default: random, so recomposing gives new ideas)")
     ap.add_argument("--recompile", action="store_true", help="rebuild every saved pair from its stored plans and exit (no composing, no calls)")
     args = ap.parse_args()
 
@@ -232,8 +263,10 @@ def main() -> None:
         results = {k: recompile_pair(tracks[k[0]], tracks[k[1]], p) for k, p in results.items()}
         pairs = []
     spent, llm_total, llm_ok = 0.0, 0, 0
+    history = History(HERE / "cache" / "composer_history.jsonl")
+    rng = random.Random(args.seed)
     for a, b in pairs:
-        fresh = plan_pair(a, b, args.composer, composer, args.candidates, args.refine, **options)
+        fresh = plan_pair(a, b, args.composer, composer, args.candidates, args.refine, history if composer else None, rng, **options)
         r = results[(a.id, b.id)] = merge_pair(results.get((a.id, b.id)), fresh)
         meta = fresh["composer"] or {}
         if not meta.get("cached"):

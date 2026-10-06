@@ -52,12 +52,12 @@ The seams between those boxes are typed contracts. That's what lets separate age
 
 | # | Contract | Lives in | Written by → read by |
 |---|---|---|---|
-| C1 | TrackAnalysis v3 | `contracts/track_analysis.schema.json`, mirrored in `web/src/contracts/track.ts`, fixture in `contracts/fixtures/` | pipeline → web, planner |
-| C2 | Control ids + 0..1 semantics | `web/src/control/controls.ts` | inputs, automation → engine, UI |
-| C3 | Command union (add-only: `playAt`, `pause`, `loopOff`, `setControlAt`, `brakeAt`) | `web/src/control/commands.ts` | inputs, co-DJ → engine |
+| C1 | TrackAnalysis v4 (sections labelled drop/build/chorus/…, cues, hooks, per-bar stem presence) | `contracts/track_analysis.schema.json`, mirrored in `web/src/contracts/track.ts`, fixture in `contracts/fixtures/` | pipeline → web, planner |
+| C2 | Control ids + 0..1 semantics (adds `keyLock`, `${deck}.key`) | `web/src/control/controls.ts` | inputs, automation → engine, UI |
+| C3 | Command union (add-only: `playAt`, `pause`, `loopOff`, `setControlAt`, `brakeAt`, `loop.slip`, `keyShift`) | `web/src/control/commands.ts` | inputs, co-DJ → engine |
 | C4 | PointerSample | `web/src/input/gesture.ts` | input adapters (mouse, hands) → GestureController |
-| C5 | Recipe JSON v3 (Chunk 6; v3 adds the outgoing `tempo` lane and `brake`) | `contracts/recipe.schema.json`, recipes in `contracts/recipes/`, mirrored in `web/src/contracts/recipe.ts` | authored by hand → automation player, planner |
-| C6 | Transitions v3 (Chunk 7) | `contracts/transitions.schema.json`, mirrored in `web/src/contracts/transitions.ts` | planner, composer API → web, co-DJ |
+| C5 | Recipe JSON v4 (Chunk 6; v3 adds the outgoing `tempo` lane and `brake`, v4 the incoming `key` lane) | `contracts/recipe.schema.json`, recipes in `contracts/recipes/`, mirrored in `web/src/contracts/recipe.ts` | authored by hand → automation player, planner |
+| C6 | Transitions v4 (Chunk 7) | `contracts/transitions.schema.json`, mirrored in `web/src/contracts/transitions.ts` | planner, composer API → web, co-DJ |
 | C7 | HTTP API (Chunk 8) | `backend/` OpenAPI (auto from FastAPI); `POST /api/composer/compose` request: `contracts/composer_request.schema.json` v1, mirrored in `web/src/contracts/composer.ts` (response: C6) | backend → web |
 
 To change a contract: bump its version, update writer and reader in the same change, regenerate fixtures, and run every test suite.
@@ -95,7 +95,13 @@ Repo layout, the TrackAnalysis schema, the shared fixture tested from both Pytho
 - The downbeat phase, from low-band onsets, harmonic change, and overall onset strength.
 - Key, via Krumhansl-Kessler profiles on chroma above C2, mapped to Camelot.
 - Per-bar band energy (low, mid, high) and loudness.
-- Sections, via bar-level self-similarity and checkerboard novelty, with rough labels.
+- Sections, via bar-level self-similarity and checkerboard novelty (energy, chroma, and with stems drums/bass/vocals presence).
+- Structure (v4, `structure.py`, rule-based):
+  - **Section labels:** intro, verse, build, drop, chorus, breakdown, main, outro, plus each section's vocal level and repetition group.
+  - **Cues:** drops, builds, breakdowns, and vocals coming in or stopping.
+  - **Hooks:** the most repeated vocal and instrumental 2/4-bar phrase, with every bar they start at.
+  - **Per-bar stem presence** is stored in the analysis.
+  - **On the board:** the overview marks drops, builds and vocal-hook repeats.
 - 16-bar phrases and a 3-band display waveform.
 
 Stems come from Demucs (`--stems`) or from `<name>.stems/` folders. Per-file fixes go in `overrides.json`.
@@ -154,7 +160,7 @@ A browser-found bug is already fixed: seeks landed 6 ms late because of the decl
 
 **Known limits, roughly in the order they'll matter:**
 - Stems are decoded at full length. That's 85 MB per 4-minute stem (44,100 × 2 ch × 4 B × 240 s), so about 680 MB with both decks on stems. That's fine for a few tracks. The fix later is windowed stems: decode only around planned transitions.
-- Changing tempo also shifts pitch (no key lock). The planned fix is offline Rubber Band renders for each planned transition.
+- ~~Changing tempo also shifts pitch (no key lock).~~ Fixed 2026-10-06: key lock and key shift (`audio/keyStage.ts`), see the decision log.
 - Sync is one-shot. Constant-tempo tracks stay locked (verified). Drifting tracks need a phase-lock loop: nudge the rate by k × phase error each frame.
 - The EQ uses shelving filters rather than true isolators, there's no headphone cue, and there are no FX yet. Echo is added in Chunk 6.
 
@@ -442,6 +448,19 @@ Two points at the same bar mean a step; otherwise values interpolate linearly. "
     - **Final setup, 6 pairs:** 85.4–91.8; 2 needed revisions (86.5 → 88; 89.3 → 89.5 → 76.5, kept 89.5). About 50–100 s and $0.12–0.30 each.
     - **Played in Chromium:** 3 of them, steps on the audio clock, locked overlaps within 0.03 ms.
   - **Open question:** on 2 of the 6 pairs, the rules baseline's plain drum bridge outscores Claude's transition (e.g. 96.1 vs 89.5), mostly from the critic's credit for long clean blends and calm exits. The critic isn't calibrated by ear, so a higher score isn't proven better; worth a listening comparison. *Listened (2026-10-06): on Stars Collide → The Longest Road the user preferred Claude's transition (89.5) to the drum bridge (96.1).*
+- **Less repetition, more ideas** (2026-10-06; the user: "it really likes doing very similar things over and over… almost a glorified rules").
+  - **Measured on 71 saved ideas:** "roll" or "echo" in 35 titles; the same toolkits again and again (strip stems + echo cut ×8, stems + bass swap ×5, highpass + roll + brake ×5).
+  - **Causes:** a technique menu in the prompt; the critic's taste applied twice (best-of-3, refinement); no memory between compositions; a small vocabulary.
+  - **Changes** (`compose/concepts.py`):
+    - **Concept cards:** each draft is built around a different concept, drawn at random from 16 archetypes. These are filtered to what the pair supports (stems, lock, vocals, beatless windows) and skip concepts used recently. Examples: hook loop mash-up, a cappella, vocal preview, false drop, call and response, breakdown swap, intro doorway, energy slam, turntable stop, tempo morph, filter duel, layer by layer, long EQ blend, echo wash, stutter edit.
+    - **Memory:** the last 12 compositions (`pipeline/cache/composer_history.jsonl`) go to Claude as `recent_work`, not to be repeated.
+    - **Novelty:** the draft to refine is chosen by score minus 8 × its toolkit similarity (Jaccard) to recent work.
+    - **Prompt:** the menu became a palette of facts, plus "one signature moment" and "the strip/swap/echo template is a last resort". Revisions keep the concept.
+    - **Recomposing gives a fresh idea.** The concept draw makes each request differ, so it isn't a cache hit.
+  - **New move: loop** (moves v4). `style` is `roll`, or `hold_1`/`hold_2`/`hold_4`, which loops bars of A, e.g. its vocal hook, while B builds.
+    - The engine's `loop` command takes `slip`, so a held loop keeps the bar clock running and lands back in time.
+    - In Chromium (`e2e/hook_loop.py`): A's audio stayed in its bars 20–22 and wrapped twice while its clock ran on; after the loop it was 0.00 ms from its clock, and B stayed locked (0.01 ms).
+  - **Live, 6 compositions in a row** ($1.76, 15 calls, ~2 min each): 6 different concepts and 6 different toolkits, scored 88.0–95.1. They were a breakdown swap, an echo wash, a vocal preview over a held loop of A, a turntable stop, a layer-by-layer stem relay with a tempo ride, and a long EQ blend.
 
 **Definition of done.**
 - The compiler and critic are unit-tested: every move compiles; each rejection reason fires; each critic penalty fires on a synthetic case.
@@ -595,3 +614,55 @@ Cut order if time runs out: voice, then guided mode, then live re-ranking (use o
 - **2026-10-05** `bpm_hint` overrides for 3 new tracks whose tempo the tracker misread: Broey (116.7, i.e. ⅔ of 175 → 175), Trivecta "Alaska" (156.6 → 150), Sheco "AM:PM" (118.8 → 125). Each was checked against an onset autocorrelation. Broey and Sheco then measure 12.1 and 11.5 ms of drift, just over the 10 ms beatmatchable limit, so they stay unlocked. Whether the limit is too tight for fast or busy genres is untested; check by ear before changing it.
 - **2026-10-06** The live composer returns one transition: best of 3 drafts, then up to 2 critic-guided revisions (`REFINE_ROUNDS`, `GOOD_SCORE = 95`). The critic's reasons now name transition bars (hits under half a bar apart are merged), so revisions can target them. Composer request v1 unchanged except the `candidates` default (now 3 = drafts). The Vite proxy timeout is now 480 s, since up to 3 calls run in one request.
 - **2026-10-06** Claude's compositions rank above the rules baseline (board list, pre-selection, and `best` in transitions.json), each best score first. Reason: by ear, the composed Stars Collide → The Longest Road beat a rules drum bridge the critic scored 6.6 points higher. The critic's weights are unchanged (one comparison); its clean-blend credit (up to +8) is the first suspect when calibrating in Chunk 11.
+- **2026-10-06** The structured-output schema is capped by the API ("compiled grammar is too large"), and a 14th move type crossed the cap. Rolls and held loops share one `loop` move (`style`) in what Claude writes; the compiler converts it to its internal `loop_roll` / `loop_hold`, which older saved plans also use. New moves must stay within 13 types, or merge like this.
+- **2026-10-06** Creativity: concept cards per draft (random, feasible, not recently used), the last 12 compositions as `recent_work`, and a novelty term (8 points × toolkit similarity) when choosing which draft to refine. Recomposing the same pair deliberately isn't cached. Automation loops always slip and snap to the grid (`loop.slip`, add-only in C3).
+- **2026-10-06** Structure detection (TrackAnalysis v4, pipeline 0.4.0), from the stems.
+  - **Labels**, by rule, with no ground truth on real tracks:
+    - A peak is a section at ≥ 0.8 of the loudest section's energy (0.85 demoted every earlier peak of Stars Collide, whose final drop is the loudest).
+    - Drop: a peak after a build or breakdown, or the beat slamming back after beatless bars. A groove filling out (a drums-only intro into the full groove) is not a drop.
+    - Chorus: otherwise, a sung peak in a repeated group.
+    - Breakdown: drums presence < 0.3.
+    - Build: a section rising ≥ 0.12 into a peak.
+  - **Build cues:** the longest of 16/8/4 bars before a drop whose 2-bar energy steps never fall and rise ≥ 0.12 overall. Builds add layers in steps; a straight-line fit rejected Stars Collide's staircase.
+  - **Drop cues** mark only entries into a peak.
+  - **Hooks:** phrases on the 2/4-bar grid, vocal similarity ≥ 0.95 (0.92 made every sung bar of a looped progression "the hook"), instrumental ≥ 0.92, preferring phrases in peak sections.
+  - **Checks:** ground truth on the demo tracks (labels, breakdown, drop and vocal cues, the 2-bar vocal hook) and synthetic arrangements (EDM, song, no stems, hook). Real tracks still need spot-checking by ear: the overview shows the cues.
+- **2026-10-06** The composer gets each track's sections, cues and hooks, plus prompt guidance:
+  - land B's drop where A's build would pay off;
+  - loop a real hook;
+  - exit at a vocal_out, never mid-hook;
+  - keep B's vocal_in clear of A's vocals;
+  - the bar arithmetic between A's, B's and transition bars.
+
+  Two concepts need structure: "build handoff" (A has a build, B a drop) and "hook mash-up" (B has a vocal hook). "Hook loop" now needs a detected hook on A, and "false drop" a drop on B. The critic adds +3 when B's drop hits with B's drums and bass fully in.
+  - **Live** (4 pairs, $1.35, 10 calls): Claude used the structure. Examples:
+    - A "false drop" whose roll lands where A's own peak would have hit (93.0).
+    - Exiting after Lissie's vocal hook finishes, with Crypto's beatless intro as the doorway (90.6).
+    - Charmae's 2-bar hook placed at the exact transition bar, over A's vocal-free drop, on drums only (91.6).
+    - One weak result: a breakdown swap at 72.9 after 3 rounds, because of level dips.
+
+    Two played in Chromium: all steps applied, locked overlaps within 0.03 ms.
+- **2026-10-06** Key lock and key shift (supersedes "keys as heard" above).
+  - **What:** each deck ends in a key stage, a real-time pitch shifter (Signalsmith Stretch, MIT, WASM AudioWorklet in live-input mode). With key lock on (global toggle, default on) it shifts the deck by `key shift − 12·log2(rate)`. Tempo changes keep the key, and `−`/`+` on a deck transposes it by semitones (±6).
+  - **The transport is untouched:** sync, rides, loops and scheduling all work as before. The brake still dives, because it ramps playbackRate without changing the nominal rate.
+  - **Placement:** after the crossfade gain, so every control and automation step stays aligned with the content. The echo taps after it, so repeats are in key.
+  - **Latency:** the shifter adds exactly its block length, 80 ms (measured with clicks at 40/60/120 ms: latency equals the block). So both decks pass through the same delay while key lock is on: the shifter when there's a shift to apply, otherwise a DelayNode of the same length (transparent), crossed over in 20 ms. Pitch changes are scheduled at output time t + latency, for the content they belong to.
+  - **Display:** waveforms draw the heard position (playhead − latency).
+  - **Off:** key lock off removes the latency (both decks together, with a short fade).
+  - **Why 80 ms:** 120 ms felt laggy; 40 ms is a short window for bass.
+  - **Cost:** about 1% of a core per deck (6 s rendered in ~60 ms).
+  - **Measured in Chromium** (`e2e/key_lock.py`, bass pitch of a looped bar):
+    - +8% tempo with key lock off: ×1.0827 (expect 1.08).
+    - With key lock on: ×1.0000.
+    - A +2 semitone shift: ×1.1134 (expect 1.1225, about 14 cents flat).
+  - **Loading:** the library builds its worklet from its own functions' source text. Vite's dev pre-bundling and the production minifier both broke it, and it never started. It's excluded from pre-bundling and loaded at run time from the published file (`?url`). The chip shows "unavailable" if the shifter fails or doesn't start within 10 s. Checked in dev and a production build, with no third-party requests.
+  - **Composer:** keys meet as written; plans gain `in_key_shift` (−2..+2, moves v5), applied to B before it enters and kept. Facts list `shift_options` and `best_in_key_shift`. The critic judges keys after the shift, no longer charges for pitch slides during rides, and the "stretch" penalty is halved (a feel change, not a pitch change).
+  - **The prompt now pushes shifting over hiding pitched parts behind drums.** The rules baseline uses the best shift for its blends.
+  - **Assumption:** the composer assumes key lock is on. With it off, composed transitions sound as before key lock.
+  - **Live** (3 pairs whose keys clash by 2–3 steps, $0.56):
+    - Protohype → Stars Collide: B shifted +2 to A's 5A, A rides to 128 and stutters into B's peak vocal (89.2).
+    - Morgan Page → Crypto: B shifted −2 to 2A, A's 12-bar build pays off with Crypto's drop (94.4; the drop lands in full).
+    - Fils de Luxe → Morgan Page: a turntable stop (88.0), no shift needed.
+
+    None has key-clash bars. In Chromium, Crypto (4A) played heard as 2A (−2 st) beside A's 2A, synced within 0.01 ms.
+  - **Bug found and fixed** (test first): the planner stored only out_start_bar and moves, so `in_key_shift` was lost from saved plans (recompiles and revision turns). 674 stored plans, mostly rules blends, were restored from their compiled key lanes.

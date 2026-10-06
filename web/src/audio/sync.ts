@@ -40,3 +40,11 @@ export function alignedLaunchBar(otherBarNow: number, multiplier: number, myPhas
   const n = Math.ceil(sNow - myPhase - 1e-9);
   return (n + myPhase) / multiplier;
 }
+
+/** A Camelot key shifted by whole semitones (one semitone = 7 steps round the wheel), like
+ *  pipeline compose/mix.py transpose_camelot. Unparseable keys come back unchanged. */
+export function transposeCamelot(c: string, semitones: number): string {
+  const m = /^(\d{1,2})([AB])$/.exec(c);
+  if (!m) return c;
+  return `${((((Number(m[1]) - 1 + 7 * semitones) % 12) + 12) % 12) + 1}${m[2]}`;
+}

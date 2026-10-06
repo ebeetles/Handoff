@@ -15,6 +15,7 @@ import type { StemName, TrackAnalysis, Waveform } from "../contracts/track";
 import { STEM_NAMES } from "../contracts/track";
 import type { DeckId } from "../control/controls";
 import { BeatGrid } from "./grid";
+import { KeyStage, keyCompensation } from "./keyStage";
 import { eqDb, filterParams, volumeGain } from "./mapping";
 import { ctxTimeAt, positionAt, reanchor, stoppedAt, type Anchor, type Loop } from "./transport";
 
@@ -57,7 +58,11 @@ export class Deck {
   private readonly meter: AnalyserNode;
   private readonly meterBuf = new Float32Array(1024);
   private meterHold = 0;
-  readonly output: GainNode; // crossfade gain; engine connects this to master
+  readonly output: GainNode; // crossfade gain
+  readonly key: KeyStage;    // key lock / key shift, after everything else (keyStage.ts)
+  readonly out: GainNode;    // the deck's final output; engine connects this to master
+  /** Key shift in semitones (key control); applied while key lock is on. */
+  keyShift = 0;
   private readonly echoSend: GainNode;
   private readonly echoDelay: DelayNode;
   readonly fxOut: GainNode;  // echo return; engine connects this to master
@@ -77,6 +82,10 @@ export class Deck {
     this.sum.connect(this.declick).connect(this.eqLow).connect(this.eqMid).connect(this.eqHigh)
       .connect(this.lowpass).connect(this.highpass).connect(this.volume).connect(this.output);
     this.volume.connect(this.meter);
+    this.key = new KeyStage(c);
+    this.out = c.createGain();
+    this.output.connect(this.key.input);
+    this.key.output.connect(this.out);
 
     this.echoSend = new GainNode(c, { gain: 0 });
     this.echoDelay = new DelayNode(c, { maxDelayTime: 2, delayTime: 0.36 });
@@ -84,7 +93,8 @@ export class Deck {
     const lp = new BiquadFilterNode(c, { type: "lowpass", frequency: 5000 });   // ... and darker
     const fb = new GainNode(c, { gain: ECHO_FEEDBACK });
     this.fxOut = c.createGain();
-    this.output.connect(this.echoSend).connect(this.echoDelay).connect(hp).connect(lp);
+    // The echo taps after the key stage: its repeats are in the deck's (shifted) key.
+    this.out.connect(this.echoSend).connect(this.echoDelay).connect(hp).connect(lp);
     lp.connect(fb).connect(this.echoDelay);
     lp.connect(this.fxOut);
   }
@@ -95,6 +105,26 @@ export class Deck {
 
   position(now = this.now): number {
     return positionAt(this.anchor, now);
+  }
+
+  /** Where the audio you hear is: the playhead, less the key stage's latency (for drawing). */
+  heardPosition(now = this.now): number {
+    return positionAt(this.anchor, Math.max(this.anchor.ctxTime, now - this.key.latency));
+  }
+
+  /** Re-aim the key stage after a rate, key shift or key lock change. */
+  private updateKey(at = this.now): void {
+    this.key.setSemitones(keyCompensation(this.anchor.rate, this.keyShift, true), at);
+  }
+
+  setKeyShift(semitones: number, at = this.now): void {
+    this.keyShift = semitones;
+    this.updateKey(at);
+  }
+
+  setKeyLock(on: boolean, at = this.now): void {
+    this.key.setLock(on, at);
+    if (on) this.updateKey(at);
   }
 
   get playing(): boolean {
@@ -216,6 +246,7 @@ export class Deck {
     if (this.slip) this.slip = reanchor(this.slip, this.now, { rate });
     const at = Math.max(this.now, this.anchor.ctxTime);
     this.sources.forEach((s) => s.playbackRate.setValueAtTime(rate, at));
+    this.updateKey(at);
   }
 
   /** Ramp the playing sources' rate to a stop between `at` and `at + dur` (a turntable brake).

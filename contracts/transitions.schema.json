@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "handoff/transitions/v3",
+  "$id": "handoff/transitions/v4",
   "title": "Transitions",
-  "description": "Composed transitions per ordered pair, written by pipeline/plan_transitions.py (Chunk 7) to web/public/library/transitions.json and read by the board (web/src/contracts/transitions.ts). Each candidate keeps its plan (moves), compiled recipe (contracts/recipe.schema.json v3, anchored), and critic verdict. Bump schema_version on any breaking change and update both sides.",
+  "description": "Composed transitions per ordered pair, written by pipeline/plan_transitions.py (Chunk 7) to web/public/library/transitions.json and read by the board (web/src/contracts/transitions.ts). Each candidate keeps its plan (moves), compiled recipe (contracts/recipe.schema.json v4, anchored), and critic verdict. Bump schema_version on any breaking change and update both sides.",
   "type": "object",
   "required": ["schema_version", "generated_at", "pairs"],
   "additionalProperties": false,
   "properties": {
-    "schema_version": { "const": 3 },
+    "schema_version": { "const": 4 },
     "generated_at": { "type": "string" },
     "pairs": {
       "type": "array",
@@ -32,9 +32,9 @@
                 "source": { "enum": ["llm", "rules"] },
                 "idea": { "type": "string" },
                 "rationale": { "type": "string" },
-                "plan": { "type": "object", "description": "The candidate as composed: out_start_bar and moves (handoff_pipeline/compose/moves.py)." },
+                "plan": { "type": "object", "description": "The candidate as composed: out_start_bar, in_key_shift (moves v5+) and moves (handoff_pipeline/compose/moves.py)." },
                 "errors": { "type": "array", "items": { "type": "string" }, "description": "Why it didn't compile (empty if it did)." },
-                "recipe": { "type": ["object", "null"], "description": "Compiled, anchored C5 v3 recipe; null if it didn't compile." },
+                "recipe": { "type": ["object", "null"], "description": "Compiled, anchored C5 v4 recipe; null if it didn't compile." },
                 "critic": {
                   "type": ["object", "null"],
                   "required": ["valid", "score", "breakdown", "measures", "reasons", "worst"],

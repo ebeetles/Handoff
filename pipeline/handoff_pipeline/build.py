@@ -19,10 +19,11 @@ import librosa
 import numpy as np
 
 from . import analyze as A
+from . import structure as S
 from .audio_io import (SERVE_SR, copy_provided_stems, file_hash, find_provided_stems, guess_title_artist,
                        separate_stems, slugify, to_flac)
 
-PIPELINE_VERSION = "0.3.0"
+PIPELINE_VERSION = "0.4.0"
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "contracts" / "track_analysis.schema.json"
 DEFAULT_PHRASE_BARS = 16
 
@@ -55,7 +56,7 @@ def process_track(src: Path, out_root: Path, overrides: dict, with_stems: bool, 
 
     stems, stems_gain_db = None, None
     provided = find_provided_stems(src)
-    kept = existing["audio"] if existing and existing.get("schema_version") == 3 else None
+    kept = existing["audio"] if existing and existing.get("schema_version") in (3, 4) else None
     if provided:
         log(f"  stems   using provided stems from {provided.name}/")
         stems, stems_gain_db = copy_provided_stems(provided, audio_dir), 0.0
@@ -78,7 +79,22 @@ def process_track(src: Path, out_root: Path, overrides: dict, with_stems: bool, 
     if "downbeat_shift" in overrides:
         fdi = (fdi + int(overrides["downbeat_shift"])) % A.BEATS_PER_BAR
     bars = A.build_bars(y, sr, beats, fdi, duration)
-    sections = A.label_sections(A.find_sections(y, sr, bars, beats), bars)
+    # Structure (v4): stems tell drums, bass, vocals and leads apart, so use them when there are any.
+    presence, vchroma, ochroma = None, None, None
+    if stems:
+        gain = 10 ** ((stems_gain_db or 0.0) / 20)
+        stem_y = {k: librosa.load(tdir / p, sr=sr, mono=True)[0] * gain for k, p in stems.items()}
+        presence = A.stem_presence(y, stem_y, [b["start_s"] for b in bars], sr)
+        vchroma, ochroma = A.bar_chroma(stem_y["vocals"], sr, bars), A.bar_chroma(stem_y["other"], sr, bars)
+        for i, b in enumerate(bars):
+            b["stems"] = {k: round(float(v[i]), 3) for k, v in presence.items()}
+    E = np.array([np.mean(list(b["energy"].values())) for b in bars])
+    low = np.array([b["energy"]["low"] for b in bars])
+    high = np.array([b["energy"]["high"] for b in bars])
+    chroma = A.bar_chroma(y, sr, bars)
+    sections = S.label_sections(A.find_sections(y, sr, bars, beats, presence), E, low, presence, chroma)
+    cues = S.find_cues(sections, E, high, presence)
+    hooks = S.find_hooks(chroma, E, presence, vchroma, ochroma, sections)
     phrase_bars = int(overrides.get("phrase_bars", DEFAULT_PHRASE_BARS))
     phrases = A.build_phrases(bars, sections, phrase_bars, int(overrides.get("phrase_offset_bars", 0)))
     key = A.estimate_key(y, sr)
@@ -86,7 +102,7 @@ def process_track(src: Path, out_root: Path, overrides: dict, with_stems: bool, 
 
     title, artist = guess_title_artist(src)
     analysis = {
-        "schema_version": 3,
+        "schema_version": 4,
         "id": tid,
         "title": overrides.get("title", title),
         "artist": overrides.get("artist", artist),
@@ -111,6 +127,8 @@ def process_track(src: Path, out_root: Path, overrides: dict, with_stems: bool, 
         "phrase_bars": phrase_bars,
         "phrases": phrases,
         "sections": sections,
+        "cues": cues,
+        "hooks": hooks,
         "key": key,
         "waveform": "waveform.json",
         "meta": {
@@ -127,7 +145,9 @@ def process_track(src: Path, out_root: Path, overrides: dict, with_stems: bool, 
     drift = "n/a" if beat["max_drift_ms"] is None else f"{beat['max_drift_ms']:.1f} ms"
     log(f"  done    {analysis['tempo']['bpm']:.2f} BPM ({beat['grid']} grid, drift {drift}, "
         f"beatmatchable={beat['beatmatchable']}), key {key['camelot']}, "
-        f"downbeat conf {db_conf:.2f}, {len(sections)} sections, stems={'yes' if stems else 'no'}")
+        f"downbeat conf {db_conf:.2f}, stems={'yes' if stems else 'no'}")
+    log(f"          {' '.join(f'{s['start_bar']}:{s['label']}' for s in sections)}; "
+        f"hooks {', '.join(f'{h['kind']} {h['bars']} bars x{len(h['starts'])} from {h['starts'][0]}' for h in hooks) or 'none'}")
     return analysis
 
 

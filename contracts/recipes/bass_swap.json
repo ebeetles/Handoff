@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "id": "bass_swap",
   "name": "Bass swap",
   "description": "The new track comes in without its bass, and on bar 8 the basslines swap in one step, so the two never fight.",

@@ -51,6 +51,8 @@ export function App() {
 }
 
 function Booth() {
+  const [keyStatus, setKeyStatus] = useState<"starting" | "ready" | "unavailable">("starting");
+  useEffect(() => { void getServices().engine.keyLockStatus().then(setKeyStatus); }, []);
   const { engine, gestures, store, bus } = useServices();
   const snap = useSnapshots();
   const [libOpen, setLibOpen] = useState(false);
@@ -73,6 +75,8 @@ function Booth() {
         </div>
         <div className="topbar-right">
           <ToggleChip id="quantize" label="Snap to beat" />
+          <ToggleChip id="keyLock" label={keyStatus === "unavailable" ? "Key lock (unavailable)" : "Key lock"} status={keyStatus}
+            title="Tempo changes keep each deck's key; the − / + under a deck's key shift it by semitones. Adds 80 ms of latency." />
           <Knob id="master" label="Master" size={40} />
           <CameraToggle />
           <button className="text-button" onClick={() => { engine.resume(); setLibOpen(true); }}>Library</button>

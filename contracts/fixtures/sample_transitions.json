@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "generated_at": "2026-10-05T00:00:00+00:00",
   "pairs": [
     {
@@ -26,12 +26,34 @@
           "in": "9B",
           "distance": 1,
           "compatible": true,
-          "when_locked": {
-            "semitones": -0.55,
-            "in_sounds_as": "9B",
-            "distance": 1,
-            "detune_cents": -55
-          }
+          "shift_options": [
+            {
+              "in_key_shift": -2,
+              "in_sounds_as": "7B",
+              "distance": 1
+            },
+            {
+              "in_key_shift": -1,
+              "in_sounds_as": "2B",
+              "distance": 6
+            },
+            {
+              "in_key_shift": 0,
+              "in_sounds_as": "9B",
+              "distance": 1
+            },
+            {
+              "in_key_shift": 1,
+              "in_sounds_as": "4B",
+              "distance": 4
+            },
+            {
+              "in_key_shift": 2,
+              "in_sounds_as": "11B",
+              "distance": 3
+            }
+          ],
+          "best_in_key_shift": 0
         },
         "stems": {
           "out": true,
@@ -53,7 +75,7 @@
       "composer": null,
       "candidates": [
         {
-          "id": "rules_4190404417ee5f97",
+          "id": "rules_88dde3f775d0f6ba",
           "source": "rules",
           "idea": "Bass swap blend",
           "rationale": "B comes in under A without its bass, then the basslines swap on bar 8.",
@@ -91,8 +113,8 @@
           },
           "errors": [],
           "recipe": {
-            "schema_version": 3,
-            "id": "rules_4190404417ee5f97",
+            "schema_version": 4,
+            "id": "rules_88dde3f775d0f6ba",
             "name": "Bass swap blend",
             "description": "B comes in under A without its bass, then the basslines swap on bar 8.",
             "bars": 16,
@@ -272,35 +294,32 @@
           },
           "critic": {
             "valid": true,
-            "score": 83.1,
+            "score": 99.2,
             "breakdown": {
-              "key_clash": -9.66,
               "calm_exit": 4.0,
-              "clean_blend": 0.75
+              "clean_blend": 7.19
             },
             "measures": {
               "bass_clash_bars": 0.0,
               "vocal_clash_bars": 0.0,
-              "key_clash_bars": 4.83,
+              "key_clash_bars": 0.0,
               "rhythm_clash_bars": 0.0,
-              "ride_tonal_bars": 0.0,
               "dip_bars": 0.0,
               "spike_bars": 0.0,
               "overlap_bars": 14.38,
-              "clean_overlap_bars": 1.5,
+              "clean_overlap_bars": 14.38,
               "locked": true,
               "vocals_known": true
             },
             "reasons": [
-              "The keys (8B, 9B (B sounds -0.5 semitones off its key at this tempo)) clash while both melodies are up.",
-              "A leaves from its break (low energy).",
-              "The two tracks blend cleanly for 1.5 bars."
+              "A leaves from its breakdown (low energy).",
+              "The two tracks blend cleanly for 14.375 bars."
             ],
-            "worst": "key_clash"
+            "worst": null
           }
         },
         {
-          "id": "rules_225802232d508a70",
+          "id": "rules_b781f6e9f72ceb9a",
           "source": "rules",
           "idea": "Filter handoff",
           "rationale": "B opens up from a low-pass while A thins out through a rising high-pass.",
@@ -358,8 +377,8 @@
           },
           "errors": [],
           "recipe": {
-            "schema_version": 3,
-            "id": "rules_225802232d508a70",
+            "schema_version": 4,
+            "id": "rules_b781f6e9f72ceb9a",
             "name": "Filter handoff",
             "description": "B opens up from a low-pass while A thins out through a rising high-pass.",
             "bars": 16,
@@ -539,37 +558,34 @@
           },
           "critic": {
             "valid": true,
-            "score": 66.8,
+            "score": 76.9,
             "breakdown": {
               "bass_clash": -19.5,
-              "key_clash": -7.5,
               "calm_exit": 4.0,
-              "clean_blend": 1.81
+              "clean_blend": 4.38
             },
             "measures": {
               "bass_clash_bars": 4.88,
               "vocal_clash_bars": 0.0,
-              "key_clash_bars": 3.75,
+              "key_clash_bars": 0.0,
               "rhythm_clash_bars": 0.0,
-              "ride_tonal_bars": 0.0,
               "dip_bars": 0.0,
               "spike_bars": 0.0,
               "overlap_bars": 13.62,
-              "clean_overlap_bars": 3.62,
+              "clean_overlap_bars": 8.75,
               "locked": true,
               "vocals_known": true
             },
             "reasons": [
-              "Both basslines are up together for 4.875 bars.",
-              "The keys (8B, 9B (B sounds -0.5 semitones off its key at this tempo)) clash while both melodies are up.",
-              "A leaves from its break (low energy).",
-              "The two tracks blend cleanly for 3.625 bars."
+              "Both basslines are up together for 4.875 bars (bars 7-11.875).",
+              "A leaves from its breakdown (low energy).",
+              "The two tracks blend cleanly for 8.75 bars."
             ],
             "worst": "bass_clash"
           }
         },
         {
-          "id": "rules_b7788997aecd77f8",
+          "id": "rules_ae0147dc142a9452",
           "source": "rules",
           "idea": "Loop roll drop",
           "rationale": "A rolls faster and faster under a rising high-pass, then B drops on the phrase.",
@@ -609,8 +625,8 @@
           },
           "errors": [],
           "recipe": {
-            "schema_version": 3,
-            "id": "rules_b7788997aecd77f8",
+            "schema_version": 4,
+            "id": "rules_ae0147dc142a9452",
             "name": "Loop roll drop",
             "description": "A rolls faster and faster under a rising high-pass, then B drops on the phrase.",
             "bars": 17,
@@ -810,7 +826,6 @@
               "vocal_clash_bars": 0.0,
               "key_clash_bars": 0.0,
               "rhythm_clash_bars": 0.0,
-              "ride_tonal_bars": 0.0,
               "dip_bars": 0.0,
               "spike_bars": 0.0,
               "overlap_bars": 0.0,
@@ -819,13 +834,13 @@
               "vocals_known": true
             },
             "reasons": [
-              "A leaves from its break (low energy)."
+              "A leaves from its breakdown (low energy)."
             ],
             "worst": null
           }
         },
         {
-          "id": "rules_8d4ef9f3a277733a",
+          "id": "rules_339ab9ace8201713",
           "source": "rules",
           "idea": "Drum bridge",
           "rationale": "B's drums join A, A drops to drums on bar 8 as B's bass and melody come in, then B's vocals.",
@@ -908,8 +923,8 @@
           },
           "errors": [],
           "recipe": {
-            "schema_version": 3,
-            "id": "rules_8d4ef9f3a277733a",
+            "schema_version": 4,
+            "id": "rules_339ab9ace8201713",
             "name": "Drum bridge",
             "description": "B's drums join A, A drops to drums on bar 8 as B's bass and melody come in, then B's vocals.",
             "bars": 16,
@@ -1152,7 +1167,6 @@
               "vocal_clash_bars": 0.0,
               "key_clash_bars": 0.0,
               "rhythm_clash_bars": 0.0,
-              "ride_tonal_bars": 0.0,
               "dip_bars": 4.0,
               "spike_bars": 0.0,
               "overlap_bars": 13.25,
@@ -1161,15 +1175,15 @@
               "vocals_known": true
             },
             "reasons": [
-              "The level drops away for 4 bars.",
-              "A leaves from its break (low energy).",
+              "The level drops away for 4 bars (bars 4-8).",
+              "A leaves from its breakdown (low energy).",
               "The two tracks blend cleanly for 13.25 bars."
             ],
             "worst": "dip"
           }
         },
         {
-          "id": "rules_26c459845e132c1a",
+          "id": "rules_9e94bf5faf8d8924",
           "source": "rules",
           "idea": "Echo out",
           "rationale": "A builds an echo and cuts on bar 8; B drops in under the tail. Works across any tempo or key.",
@@ -1201,8 +1215,8 @@
           },
           "errors": [],
           "recipe": {
-            "schema_version": 3,
-            "id": "rules_26c459845e132c1a",
+            "schema_version": 4,
+            "id": "rules_9e94bf5faf8d8924",
             "name": "Echo out",
             "description": "A builds an echo and cuts on bar 8; B drops in under the tail. Works across any tempo or key.",
             "bars": 12,
@@ -1405,7 +1419,6 @@
               "vocal_clash_bars": 0.0,
               "key_clash_bars": 0.0,
               "rhythm_clash_bars": 0.0,
-              "ride_tonal_bars": 0.0,
               "dip_bars": 0.0,
               "spike_bars": 0.0,
               "overlap_bars": 0.0,
@@ -1414,13 +1427,13 @@
               "vocals_known": true
             },
             "reasons": [
-              "A leaves from its break (low energy)."
+              "A leaves from its breakdown (low energy)."
             ],
             "worst": null
           }
         }
       ],
-      "best": 2
+      "best": 0
     }
   ]
 }

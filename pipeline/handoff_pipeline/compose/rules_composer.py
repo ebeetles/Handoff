@@ -8,7 +8,7 @@ one); B enters from its first phrase. Blends need a syncable tempo; cuts don't.
 from __future__ import annotations
 
 from .facts import TrackData, exit_bars
-from .mix import choose_sync
+from .mix import best_key_shift, choose_sync
 
 
 def _exit(a: TrackData, need: int) -> int | None:
@@ -27,7 +27,10 @@ def compose_rules(a: TrackData, b: TrackData) -> list[dict]:
     def add(idea: str, rationale: str, need: int, moves: list[dict]) -> None:
         start = _exit(a, need)
         if start is not None:
-            out.append({"idea": idea, "rationale": rationale, "out_start_bar": start, "moves": moves})
+            # Blends get the key shift that makes the pair compatible (key lock holds it); cuts don't need one.
+            blend = any(m["move"] in ("bass_swap", "filter_sweep", "stem_drop") for m in moves)
+            out.append({"idea": idea, "rationale": rationale, "out_start_bar": start, "moves": moves,
+                        "in_key_shift": best_key_shift(a.camelot, b.camelot) if blend else 0})
 
     if syncable:
         add("Bass swap blend", "B comes in under A without its bass, then the basslines swap on bar 8.", 16, [

@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "id": "echo_out",
   "name": "Echo out",
   "description": "The old track builds an echo, cuts on bar 8 and rings out, and the new track drops in under the tail. Works across any tempo or key.",

@@ -10,8 +10,8 @@ from __future__ import annotations
 from collections import defaultdict
 
 from .facts import TrackData, lock
-from .mix import DEFAULTS, choose_sync, lane_value_at, ride_sync, tempo_value, volume_gain, xfade_gains
-from .moves import check_plan
+from .mix import DEFAULTS, choose_sync, key_value, lane_value_at, ride_sync, tempo_value, volume_gain, xfade_gains
+from .moves import check_plan, normalize
 from .recipes import recipe_errors
 
 EQ_LEVEL = {"kill": 0.0, "dip": 0.3, "flat": 0.5, "boost": 0.62}
@@ -28,6 +28,7 @@ def compile_plan(c: dict, a: TrackData, b: TrackData, rid: str) -> tuple[dict | 
     errs = check_plan(c)
     if errs:
         return None, errs
+    c = normalize(c)   # `loop` -> loop_roll / loop_hold
     moves = c["moves"]
     enter = next(m for m in moves if m["move"] == "in_enter")
     length = next(m for m in moves if m["move"] == "out_stop")["at_bar"]
@@ -57,6 +58,8 @@ def compile_plan(c: dict, a: TrackData, b: TrackData, rid: str) -> tuple[dict | 
     events: list[dict] = [{"at_bar": enter["at_bar"], "deck": "in", "command": "play"},
                           {"at_bar": length, "deck": "out", "command": "pause"}]
     stems = {"in"} if b.has_stems else set()
+    if c.get("in_key_shift"):   # set while B is silent, before it comes in
+        init[("in", "key")] = key_value(int(c["in_key_shift"]))
     both_stems = a.has_stems and b.has_stems
     has_stems = {"out": a.has_stems, "in": b.has_stems}
 
@@ -113,6 +116,9 @@ def compile_plan(c: dict, a: TrackData, b: TrackData, rid: str) -> tuple[dict | 
             for at, beats in ((s, 0.5), (s + n / 2, 0.25), (s + 3 * n / 4, 0.125)):
                 events.append({"at_bar": _q(at), "deck": "out", "command": "loop", "beats": beats})
             events.append({"at_bar": m["end_bar"], "deck": "out", "command": "loop_off"})
+        elif k == "loop_hold":
+            events.append({"at_bar": m["start_bar"], "deck": "out", "command": "loop", "beats": 4 * m["bars"]})
+            events.append({"at_bar": m["end_bar"], "deck": "out", "command": "loop_off"})
         elif k == "volume":
             segs[(m["deck"], "volume")].append((m["start_bar"], m["end_bar"], m["to"], k))
         elif k == "rhythmic_gate":
@@ -161,8 +167,8 @@ def compile_plan(c: dict, a: TrackData, b: TrackData, rid: str) -> tuple[dict | 
                 clean.append([float(p[0]), round(float(p[1]), 4)])
         lanes.append({"deck": deck, "control": ctl, "points": clean})
 
-    for l in lanes:
-        if l["deck"] == "in" and abs(l["points"][-1][1] - DEFAULTS[l["control"]]) > 1e-4:
+    for l in lanes:   # B's key shift is meant to last (key lock holds it after the transition)
+        if l["deck"] == "in" and l["control"] != "key" and abs(l["points"][-1][1] - DEFAULTS[l["control"]]) > 1e-4:
             errs.append(f"incoming {l['control']} must return to neutral before out_stop")
 
     xf = next((l for l in lanes if l["control"] == "xfader"), None)
@@ -187,7 +193,7 @@ def compile_plan(c: dict, a: TrackData, b: TrackData, rid: str) -> tuple[dict | 
         x += 0.25
 
     recipe = {
-        "schema_version": 3, "id": rid, "name": c["idea"], "description": c["rationale"], "bars": length,
+        "schema_version": 4, "id": rid, "name": c["idea"], "description": c["rationale"], "bars": length,
         "requires": {"stems": "both" if stems == {"out", "in"} else (stems.pop() if stems else "none"),
                      "beatmatchable": overlap and lockable(a, b, ride is not None), "max_camelot_distance": None},
         "anchor": {"out_track": a.id, "in_track": b.id, "out_start_bar": start, "in_from_bar": fb},

@@ -76,66 +76,73 @@
       "best": 0,
       "candidates": [
         {
-          "id": "fixture_ride_brake",
+          "id": "fixture_hook_loop",
           "source": "rules",
-          "idea": "Drum ride and brake",
-          "rationale": "A's drums ride up to B's tempo, then A brakes as B takes over.",
+          "idea": "Hook loop over B",
+          "rationale": "A's vocal loops while B's groove arrives; A lands back in time.",
           "plan": {
             "out_start_bar": 16,
             "moves": [
               {
-                "move": "stem_drop",
-                "deck": "out",
-                "stems": [
-                  "bass",
-                  "other",
-                  "vocals"
-                ],
-                "action": "mute",
-                "at_bar": 0
-              },
-              {
-                "move": "tempo_ride",
-                "start_bar": 0,
-                "end_bar": 4
-              },
-              {
                 "move": "in_enter",
-                "at_bar": 4,
+                "at_bar": 0,
                 "from_bar": 32
               },
               {
                 "move": "crossfade",
-                "start_bar": 4,
-                "end_bar": 6,
+                "start_bar": 0,
+                "end_bar": 4,
                 "to": 0.5,
                 "shape": "ramp"
               },
               {
-                "move": "brake",
-                "at_bar": 7.5,
-                "beats": 2
+                "move": "loop_hold",
+                "start_bar": 4,
+                "end_bar": 10,
+                "bars": 2
+              },
+              {
+                "move": "stem_drop",
+                "deck": "out",
+                "stems": [
+                  "drums",
+                  "bass",
+                  "other"
+                ],
+                "action": "mute",
+                "at_bar": 4
+              },
+              {
+                "move": "stem_drop",
+                "deck": "out",
+                "stems": [
+                  "drums",
+                  "bass",
+                  "other"
+                ],
+                "action": "unmute",
+                "at_bar": 10
               },
               {
                 "move": "crossfade",
-                "start_bar": 8,
-                "end_bar": 8,
+                "start_bar": 12,
+                "end_bar": 12,
                 "to": 1,
                 "shape": "cut"
               },
               {
                 "move": "out_stop",
-                "at_bar": 8
+                "at_bar": 12
               }
             ]
           },
           "errors": [],
           "recipe": {
             "schema_version": 4,
-            "id": "fixture_ride_brake",
-            "name": "Drum ride and brake",
-            "description": "A's drums ride up to B's tempo, then A brakes as B takes over.",
-            "bars": 8,
+            "id": "fixture_hook_loop",
+            "name": "Hook loop over B",
+            "description": "A's vocal loops while B's groove arrives; A lands back in time.",
+            "bars": 12,
             "requires": {
               "stems": "both",
               "beatmatchable": true,
@@ -149,18 +156,23 @@
             },
             "events": [
               {
-                "at_bar": 4,
+                "at_bar": 0,
                 "deck": "in",
                 "command": "play"
               },
               {
-                "at_bar": 7.5,
+                "at_bar": 4,
                 "deck": "out",
-                "command": "brake",
-                "beats": 2
+                "command": "loop",
+                "beats": 8
               },
               {
-                "at_bar": 8,
+                "at_bar": 10,
+                "deck": "out",
+                "command": "loop_off"
+              },
+              {
+                "at_bar": 12,
                 "deck": "out",
                 "command": "pause"
               }
@@ -176,18 +188,14 @@
                   ],
                   [
                     4.0,
-                    0.0
-                  ],
-                  [
-                    6.0,
                     0.5
                   ],
                   [
-                    8.0,
+                    12.0,
                     0.5
                   ],
                   [
-                    8.0,
+                    12.0,
                     1.0
                   ]
                 ]
@@ -301,8 +309,46 @@
                     1.0
                   ],
                   [
-                    0.0,
+                    4.0,
+                    1.0
+                  ],
+                  [
+                    4.0,
                     0.0
+                  ],
+                  [
+                    10.0,
+                    0.0
+                  ],
+                  [
+                    10.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "out",
+                "control": "stem.drums",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    4.0,
+                    1.0
+                  ],
+                  [
+                    4.0,
+                    0.0
+                  ],
+                  [
+                    10.0,
+                    0.0
+                  ],
+                  [
+                    10.0,
+                    1.0
                   ]
                 ]
               },
@@ -315,54 +361,20 @@
                     1.0
                   ],
                   [
-                    0.0,
-                    0.0
-                  ]
-                ]
-              },
-              {
-                "deck": "out",
-                "control": "stem.vocals",
-                "points": [
-                  [
-                    0.0,
+                    4.0,
                     1.0
                   ],
                   [
-                    0.0,
-                    0.0
-                  ]
-                ]
-              },
-              {
-                "deck": "out",
-                "control": "tempo",
-                "points": [
-                  [
-                    0.0,
-                    0.5
-                  ],
-                  [
                     4.0,
-                    0.7016
-                  ]
-                ]
-              },
-              {
-                "deck": "out",
-                "control": "volume",
-                "points": [
-                  [
-                    0.0,
-                    0.8
-                  ],
-                  [
-                    8.0,
-                    0.8
-                  ],
-                  [
-                    8.0,
                     0.0
+                  ],
+                  [
+                    10.0,
+                    0.0
+                  ],
+                  [
+                    10.0,
+                    1.0
                   ]
                 ]
               }
@@ -370,26 +382,30 @@
           },
           "critic": {
             "valid": true,
-            "score": 89.8,
+            "score": 87.5,
             "breakdown": {
-              "clean_blend": 1.75
+              "bass_clash": -8.0,
+              "drop_lands": 3.0,
+              "clean_blend": 4.5
             },
             "measures": {
-              "bass_clash_bars": 0.0,
+              "bass_clash_bars": 2.0,
               "vocal_clash_bars": 0.0,
               "key_clash_bars": 0.0,
               "rhythm_clash_bars": 0.0,
               "dip_bars": 0.0,
               "spike_bars": 0.0,
-              "overlap_bars": 3.5,
-              "clean_overlap_bars": 3.5,
+              "overlap_bars": 11.0,
+              "clean_overlap_bars": 9.0,
               "locked": true,
               "vocals_known": true
             },
             "reasons": [
-              "The two tracks blend cleanly for 3.5 bars."
+              "Both basslines are up together for 2 bars (bars 10-12).",
+              "B's drop lands in full during the transition (bar 8).",
+              "The two tracks blend cleanly for 9 bars."
             ],
-            "worst": null
+            "worst": "bass_clash"
           }
         }
       ]

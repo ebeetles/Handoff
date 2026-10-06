@@ -84,8 +84,9 @@ export function StemTile({ id, label, disabled }: { id: ControlId; label: string
   );
 }
 
-export function ToggleChip({ id, label }: { id: ControlId; label: string }) {
+export function ToggleChip({ id, label, status, title }: { id: ControlId; label: string; status?: string; title?: string }) {
   const v = useControl(id);
   const ref = useHitTarget<HTMLDivElement>({ kind: "toggle", control: id });
-  return <div className={`chip ${v > 0.5 ? "on" : ""}`} ref={ref} role="switch" aria-checked={v > 0.5}><span className="dot" />{label}</div>;
+  return <div className={`chip ${v > 0.5 ? "on" : ""}`} ref={ref} role="switch" aria-checked={v > 0.5} data-status={status} title={title}>
+    <span className="dot" />{label}</div>;
 }

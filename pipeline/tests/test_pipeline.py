@@ -94,7 +94,22 @@ def test_amber_room_structure(library):
     secs = results["Demo - Amber Room.wav"]["sections"]
     starts = [s["start_bar"] for s in secs]
     assert starts[:5] == [0, 16, 32, 40, 56]
-    assert [s["label"] for s in secs[:5]] == ["intro", "main", "break", "main", "outro"]
+    assert [s["label"] for s in secs[:5]] == ["intro", "main", "breakdown", "drop", "outro"]
+
+
+def test_cues_and_hooks_match_the_demo_arrangement(library):
+    """make_demo_tracks: drums intro (0-16), groove (16-32), beatless vocal breakdown (32-40),
+    everything with vocals (40-56), drums outro (56-64). The vocal melody is a 2-bar cycle."""
+    _, results, _ = library
+    for name, a in results.items():
+        cues = {(c["kind"], c["bar"]) for c in a["cues"]}
+        assert {("breakdown", 32), ("drop", 40), ("vocal_in", 32), ("vocal_out", 56)} <= cues, (name, a["cues"])
+        voc = [h for h in a["hooks"] if h["kind"] == "vocal"]
+        assert voc and voc[0]["bars"] in (2, 4) and len(voc[0]["starts"]) >= 3, (name, a["hooks"])
+        assert all(32 <= s and s + voc[0]["bars"] <= 56 for s in voc[0]["starts"]), (name, voc)
+        assert all(set(b["stems"]) == {"drums", "bass", "vocals", "other"} for b in a["bars"])
+        sec = {s["label"]: s for s in a["sections"]}
+        assert sec["breakdown"]["vocals"] == "lots" and sec["intro"]["vocals"] == "none"
 
 
 def test_phrases_cover_bars(library):

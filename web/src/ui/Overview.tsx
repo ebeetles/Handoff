@@ -48,13 +48,30 @@ export function Overview({ deck }: { deck: DeckId }) {
         }
         c.fillStyle = ink + "aa";
         for (const p of a.phrases) c.fillRect(Math.round((p.start_s / dur) * w), 0, dpr, wh);
+        // Structure (v4 cues/hooks): a build ramps up in the strip, a drop is a tick at the top,
+        // and each repeat of the vocal hook is underlined, so detection can be checked by ear.
+        const xAt = (bar: number) => ((a.bars[Math.min(bar, a.bars.length - 1)]?.start_s ?? dur) / dur) * w;
+        const hotDraw = cssVar(canvas, "--hot");
+        for (const cue of a.cues) {
+          const x0 = xAt(cue.bar), x1 = xAt(cue.bar + cue.bars);
+          if (cue.kind === "build") {
+            c.fillStyle = hotDraw;
+            c.beginPath(); c.moveTo(x0, h); c.lineTo(x1, h - strip); c.lineTo(x1, h); c.closePath(); c.fill();
+          } else if (cue.kind === "drop") {
+            c.fillStyle = hotDraw;
+            c.beginPath(); c.moveTo(x0 - 4 * dpr, 0); c.lineTo(x0 + 4 * dpr, 0); c.lineTo(x0, 6 * dpr); c.closePath(); c.fill();
+          }
+        }
+        const vocalHook = a.hooks.find((k) => k.kind === "vocal");
+        c.fillStyle = ink + "88";
+        for (const st of vocalHook?.starts ?? []) c.fillRect(xAt(st), h - strip - 2 * dpr, Math.max(dpr, xAt(st + vocalHook!.bars) - xAt(st)), dpr);
         cache = { id: a.id, w, h, img };
       }
       ctx.drawImage(cache.img, 0, 0);
       const hot = cssVar(canvas, "--hot");
       if (d.anchor.loop) { ctx.fillStyle = hot + "55"; ctx.fillRect((d.anchor.loop.start / dur) * w, 0, Math.max(2, ((d.anchor.loop.end - d.anchor.loop.start) / dur) * w), h); }
       ctx.fillStyle = hot; ctx.fillRect((d.cuePos / dur) * w - dpr, 0, 2 * dpr, 8 * dpr);
-      ctx.fillStyle = "#fff"; ctx.fillRect((d.position() / dur) * w - dpr, 0, 2 * dpr, h);
+      ctx.fillStyle = "#fff"; ctx.fillRect((d.heardPosition() / dur) * w - dpr, 0, 2 * dpr, h);
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);

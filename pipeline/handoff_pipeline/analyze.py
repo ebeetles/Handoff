@@ -318,7 +318,35 @@ def _checkerboard(half: int) -> np.ndarray:
     return np.outer(sign * g, sign * g)
 
 
-def find_sections(y: np.ndarray, sr: int, bars: list[dict], beats: np.ndarray) -> list[dict]:
+def bar_chroma(y: np.ndarray, sr: int, bars: list[dict]) -> np.ndarray:
+    """12 x n_bars pitch-class profile (chroma above C2) of a signal: the mix, or a stem."""
+    S = np.abs(librosa.stft(y, n_fft=2048, hop_length=HOP)) ** 2
+    chroma = _chroma_from_power(S, librosa.fft_frequencies(sr=sr, n_fft=2048), sr)
+    return segment_means(chroma, np.array([b["start_s"] for b in bars]), sr, HOP)
+
+
+STEM_DB = (-24.0, -14.0)   # stem vs mix, per bar: 0 presence at the first, 1 at the second
+
+
+def stem_presence(mix: np.ndarray, stems: dict[str, np.ndarray], bar_starts_s: list[float], sr: int) -> dict[str, np.ndarray]:
+    """Per stem, per bar presence (0..1): the stem's level against the whole mix in that bar,
+    0 at -24 dB, 1 at -14 dB. Against the mix, not the stem's own loud bars: an instrumental
+    track's vocal stem is only bleed, 45-65 dB under the mix, and must read as no vocals. Stems
+    must already be at mix scale (stems_gain_db applied) and DC-free."""
+    m = mix - mix.mean()
+    edges = [int(s * sr) for s in bar_starts_s] + [len(m)]
+    out = {}
+    for name, y in stems.items():
+        n = min(len(y), len(m))
+        y = y[:n] - y[:n].mean()
+        share = np.array([10 * np.log10((np.mean(y[a:max(b, a + 1)] ** 2) + 1e-12) / (np.mean(m[a:max(b, a + 1)] ** 2) + 1e-12))
+                          for a, b in zip(edges[:-1], edges[1:])])
+        out[name] = np.clip((share - STEM_DB[0]) / (STEM_DB[1] - STEM_DB[0]), 0, 1)
+    return out
+
+
+def find_sections(y: np.ndarray, sr: int, bars: list[dict], beats: np.ndarray,
+                  presence: dict[str, np.ndarray] | None = None) -> list[dict]:
     """Bar-level self-similarity + checkerboard novelty (Foote).
 
     F[i] = standardized [band energies, chroma] for bar i. SSM[i, j] = cosine(F[i], F[j]).
@@ -334,12 +362,15 @@ def find_sections(y: np.ndarray, sr: int, bars: list[dict], beats: np.ndarray) -
     chroma = _chroma_from_power(S, librosa.fft_frequencies(sr=sr, n_fft=2048), sr)
     bar_chroma = segment_means(chroma, np.array([b["start_s"] for b in bars]), sr, HOP)
     energy = np.array([[b["energy"]["low"], b["energy"]["mid"], b["energy"]["high"]] for b in bars]).T
-    F = np.vstack([energy, bar_chroma])
+    # With stems, drums / bass / vocals coming and going are boundaries too (a breakdown, a
+    # vocal entry), weighted like energy.
+    stem_rows = np.array([presence[k] for k in ("drums", "bass", "vocals")]) if presence else np.zeros((0, n))
+    F = np.vstack([energy, stem_rows, bar_chroma])
     F = (F - F.mean(axis=1, keepdims=True)) / (F.std(axis=1, keepdims=True) + 1e-9)
     # Weight AFTER standardizing (weighting before is undone by the z-score). 3 energy rows
     # vs 12 chroma rows: x2 equalizes their total contribution, x3 makes energy dominate,
     # since energy changes are what DJ structure is made of.
-    F[:3] *= 3.0
+    F[:3 + len(stem_rows)] *= 3.0
     Fn = F / (np.linalg.norm(F, axis=0, keepdims=True) + 1e-9)
     ssm = Fn.T @ Fn
 
@@ -362,38 +393,6 @@ def find_sections(y: np.ndarray, sr: int, bars: list[dict], beats: np.ndarray) -
 
 def _section(index: int, start: int, end: int, bars: list[dict]) -> dict:
     return {"index": index, "start_bar": start, "end_bar": end, "start_s": bars[start]["start_s"]}
-
-
-def label_sections(sections: list[dict], bars: list[dict]) -> list[dict]:
-    """Rough labels from energy relative to the track's loudest section. Deliberately
-    coarse; semantic labels (build, drop, verse) come from tagging later.
-
-    r = E_section / E_max with E = mean of the three normalized bands.
-    level: high if r >= 0.85, mid if r >= 0.6, else low.
-    label: first/last non-high section -> intro/outro; a middle section whose low band
-    (kick + bass) is under 0.4 -> break; everything else -> main.
-    """
-    def mean_band(s, band=None):
-        rng = range(s["start_bar"], s["end_bar"])
-        if band:
-            return float(np.mean([bars[i]["energy"][band] for i in rng]))
-        return float(np.mean([np.mean(list(bars[i]["energy"].values())) for i in rng]))
-
-    e = [mean_band(s) for s in sections]
-    e_max = max(max(e), 1e-9)
-    last = len(sections) - 1
-    for s, es in zip(sections, e):
-        r = es / e_max
-        s["energy_level"] = "high" if r >= 0.85 else "mid" if r >= 0.6 else "low"
-        if last > 0 and s["index"] == 0 and r < 0.85:
-            s["label"] = "intro"
-        elif last > 0 and s["index"] == last and r < 0.85:
-            s["label"] = "outro"
-        elif mean_band(s, "low") < 0.4:
-            s["label"] = "break"
-        else:
-            s["label"] = "main"
-    return sections
 
 
 def build_phrases(bars: list[dict], sections: list[dict], phrase_bars: int, offset_bars: int = 0) -> list[dict]:
