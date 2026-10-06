@@ -36,7 +36,7 @@ export class TransitionLibrary {
       const cs = new Map([...(pairs.get(key)?.candidates ?? []), ...p.candidates].map((c) => [c.id, c]));
       const candidates = [...cs.values()];
       const valid = candidates.map((c, i) => ({ c, i })).filter(({ c }) => c.recipe && c.critic?.valid);
-      valid.sort((a, b) => b.c.critic!.score - a.c.critic!.score);
+      valid.sort((a, b) => rank(a.c, b.c));
       pairs.set(key, { ...p, candidates, best: valid[0]?.i ?? null });
     }
     this.data = { ...data, pairs: [...pairs.values()] };
@@ -48,10 +48,14 @@ export class TransitionLibrary {
   }
 }
 
-/** Playable candidates (compiled and valid) for out -> in, best score first. */
+/** Playable candidates (compiled and valid) for out -> in: Claude's compositions first, then the
+ *  rules baseline, each best score first. By ear, Claude's beat a rules drum bridge the critic
+ *  scored 6.6 points higher (Stars Collide -> The Longest Road); the critic isn't calibrated yet. */
 export function playable(t: Transitions, outTrack: string, inTrack: string): Candidate[] {
   const p = t.pairs.find((x) => x.out_track === outTrack && x.in_track === inTrack);
-  return (p?.candidates ?? [])
-    .filter((c) => c.recipe && c.critic?.valid)
-    .sort((a, b) => b.critic!.score - a.critic!.score);
+  return (p?.candidates ?? []).filter((c) => c.recipe && c.critic?.valid).sort(rank);
+}
+
+function rank(a: Candidate, b: Candidate): number {
+  return Number(b.source === "llm") - Number(a.source === "llm") || b.critic!.score - a.critic!.score;
 }

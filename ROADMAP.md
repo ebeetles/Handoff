@@ -429,6 +429,19 @@ Two points at the same bar mean a step; otherwise values interpolate linearly. "
     
     All steps were applied and there were no page errors.
   - **Not judged by ear yet.** In particular: whether 40 cents of detune is the right free allowance, and the rhythm weights.
+- **One transition, refined** (2026-10-06; the user asked for one really good transition every time instead of four ideas).
+  - **Loop** (`plan_pair(..., refine=2)`, used by the backend and the CLI):
+    1. Claude drafts 3 ideas in one call, and the compiler and critic pick the strongest.
+    2. While it has a fixable problem, Claude gets it back as a multi-turn revision: compile errors, or the critic's findings with transition bar numbers and its penalties. It returns one improved plan, up to 2 rounds.
+    3. The best version across rounds is kept, so a revision that over-corrects can't replace a better draft.
+  - **Stopping:** at score ≥ 95, or when no fixable penalty is left. Penalties the pair itself causes (B's stretch after a maximum tempo ride) are marked unavoidable and not sent as things to fix.
+  - **Metadata:** composer metadata records each round's score and which round was kept.
+  - **Live, 9 compositions:**
+    - **Single draft first:** Fils de Luxe → Stars Collide went 85.6 → 84.8 → 89.8 in one run, and 53.5 → 57.2 → 71.1 in another. Draft quality varies too much for "good every time", hence the 3 drafts.
+    - **Protohype → Morgan Page:** Claude chased the unavoidable 7% stretch by adding moves (82.6 → 66.6). Hence the unavoidable flag, the 10-move limit stated in the prompt, and "smallest targeted change".
+    - **Final setup, 6 pairs:** 85.4–91.8; 2 needed revisions (86.5 → 88; 89.3 → 89.5 → 76.5, kept 89.5). About 50–100 s and $0.12–0.30 each.
+    - **Played in Chromium:** 3 of them, steps on the audio clock, locked overlaps within 0.03 ms.
+  - **Open question:** on 2 of the 6 pairs, the rules baseline's plain drum bridge outscores Claude's transition (e.g. 96.1 vs 89.5), mostly from the critic's credit for long clean blends and calm exits. The critic isn't calibrated by ear, so a higher score isn't proven better; worth a listening comparison. *Listened (2026-10-06): on Stars Collide → The Longest Road the user preferred Claude's transition (89.5) to the drum bridge (96.1).*
 
 **Definition of done.**
 - The compiler and critic are unit-tested: every move compiles; each rejection reason fires; each critic penalty fires on a synthetic case.
@@ -580,3 +593,5 @@ Cut order if time runs out: voice, then guided mode, then live re-ranking (use o
   - **The planner merges** new candidates into saved pairs (by content-hashed id), the same as the backend, and recompiles pairs from an older transitions version from their stored plans.
 - **2026-10-05** Track selection: `fetch_audius.py` adds `--sort popular`, `--min-plays` and a 1.5–10 minute window (skips DJ mixes and skits). A plain genre search returned four 25–108 minute mixes, a skit, and barely played uploads the user rejected by ear. Plays are a rough quality signal; vocals are confirmed after preprocessing from the stems, not the title.
 - **2026-10-05** `bpm_hint` overrides for 3 new tracks whose tempo the tracker misread: Broey (116.7, i.e. ⅔ of 175 → 175), Trivecta "Alaska" (156.6 → 150), Sheco "AM:PM" (118.8 → 125). Each was checked against an onset autocorrelation. Broey and Sheco then measure 12.1 and 11.5 ms of drift, just over the 10 ms beatmatchable limit, so they stay unlocked. Whether the limit is too tight for fast or busy genres is untested; check by ear before changing it.
+- **2026-10-06** The live composer returns one transition: best of 3 drafts, then up to 2 critic-guided revisions (`REFINE_ROUNDS`, `GOOD_SCORE = 95`). The critic's reasons now name transition bars (hits under half a bar apart are merged), so revisions can target them. Composer request v1 unchanged except the `candidates` default (now 3 = drafts). The Vite proxy timeout is now 480 s, since up to 3 calls run in one request.
+- **2026-10-06** Claude's compositions rank above the rules baseline (board list, pre-selection, and `best` in transitions.json), each best score first. Reason: by ear, the composed Stars Collide → The Longest Road beat a rules drum bridge the critic scored 6.6 points higher. The critic's weights are unchanged (one comparison); its clean-blend credit (up to +8) is the first suspect when calibrating in Chunk 11.

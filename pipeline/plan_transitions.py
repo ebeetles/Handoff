@@ -43,13 +43,80 @@ def cost(usage: dict | None, model: str) -> float:
             + (usage.get("cache_creation_input_tokens") or 0) * p_cw + (usage.get("cache_read_input_tokens") or 0) * p_cr) / 1e6
 
 
-def plan_pair(a, b, composer_kind: str, composer: Composer | None, n: int, **options) -> dict:
-    raw: list[tuple[str, dict]] = [("rules", c) for c in compose_rules(a, b)] if composer_kind in ("rules", "both") else []
+GOOD_SCORE = 95   # a refined transition stops early at this score, or with no fixable critic penalties
+# Penalties the pair itself causes, which no arrangement of an overlap can fix (B's tempo change
+# after the most the outgoing deck can ride). Claude chased one, live, by piling on moves.
+UNAVOIDABLE = {"stretch": "comes from the two tempos: once locked, B must play this far off its own tempo"}
+
+
+def plan_pair(a, b, composer_kind: str, composer: Composer | None, n: int, refine: int = 0, **options) -> dict:
+    """Candidates for one pair. With refine > 0 the LLM's best idea is revised up to `refine`
+    times, with the compiler's errors and the critic's findings as feedback, and only the best
+    version is kept: one transition, worked on until it's good."""
+    out = _candidates([("rules", c) for c in compose_rules(a, b)], a, b, options) if composer_kind in ("rules", "both") else []
     meta = None
     if composer_kind in ("llm", "both") and composer:
         cands, meta = composer.compose(a, b, n, **options)
-        raw += [("llm", c) for c in cands]
-    return _pair(a, b, _candidates(raw, a, b, options), meta)
+        llm = _candidates([("llm", c) for c in cands], a, b, options)
+        if refine and llm:
+            llm, meta = _refine(a, b, composer, llm, meta, refine, options)
+        out += llm
+    return _pair(a, b, out, meta)
+
+
+def _rank(c: dict) -> float:
+    return c["critic"]["score"] if c["critic"] and c["critic"]["valid"] else -1.0
+
+
+def best_index(cands: list[dict]) -> int | None:
+    """Claude's compositions before the rules baseline, then by score. By ear, a composed
+    transition beat a rules drum bridge the (uncalibrated) critic scored 6.6 points higher."""
+    valid = [i for i, c in enumerate(cands) if c["recipe"] and _rank(c) >= 0]
+    return max(valid, key=lambda i: (cands[i]["source"] == "llm", _rank(cands[i]))) if valid else None
+
+
+def good_enough(c: dict) -> bool:
+    v = c["critic"]
+    return bool(v and v["valid"] and (v["score"] >= GOOD_SCORE or not any(x < 0 for k, x in v["breakdown"].items() if k not in UNAVOIDABLE)))
+
+
+def feedback(c: dict) -> dict:
+    """What the board tells Claude about its plan: compile errors, or the critic's verdict."""
+    v = c["critic"]
+    if not c["recipe"]:
+        return {"compiled": False, "errors": c["errors"]}
+    return {"compiled": True, "playable": v["valid"], "score": v["score"], "findings": v["reasons"],
+            "penalties": {k: x for k, x in v["breakdown"].items() if x < 0 and k not in UNAVOIDABLE},
+            "unavoidable": {k: UNAVOIDABLE[k] for k, x in v["breakdown"].items() if x < 0 and k in UNAVOIDABLE}}
+
+
+def _refine(a, b, composer: Composer, llm: list[dict], meta: dict, rounds: int, options: dict) -> tuple[list[dict], dict]:
+    cur = max(llm, key=_rank)
+    versions, history = [cur], []
+    log = [{"round": 0, "score": cur["critic"]["score"] if cur["critic"] else None, "valid": _rank(cur) >= 0,
+            "issues": len(cur["errors"]) + len(feedback(cur).get("penalties", {}))}]
+    total = {**meta, "usage": dict(meta.get("usage") or {})}
+    for r in range(1, rounds + 1):
+        if good_enough(cur) or meta.get("error"):
+            break
+        history.append(({"idea": cur["idea"], "rationale": cur["rationale"], **cur["plan"]}, feedback(cur)))
+        cands, m = composer.compose(a, b, 1, history=history, **options)
+        for k, v in (m.get("usage") or {}).items():
+            if isinstance(v, (int, float)):
+                total["usage"][k] = (total["usage"].get(k) or 0) + v
+        total["latency_s"] = round((total.get("latency_s") or 0) + (m.get("latency_s") or 0), 2)
+        total["cached"] = bool(total.get("cached")) and bool(m.get("cached"))
+        if m.get("error") or not cands:
+            log.append({"round": r, "error": m.get("error") or "no candidate"})
+            break
+        cur = _candidates([("llm", cands[0])], a, b, options)[0]
+        versions.append(cur)
+        log.append({"round": r, "score": cur["critic"]["score"] if cur["critic"] else None, "valid": _rank(cur) >= 0,
+                    "issues": len(cur["errors"]) + len(feedback(cur).get("penalties", {}))})
+    best = max(versions, key=_rank)   # a revision that made things worse doesn't replace a better draft
+    total["rounds"] = log
+    total["kept_round"] = versions.index(best)
+    return [best], total
 
 
 def recompile_pair(a, b, saved: dict) -> dict:
@@ -83,15 +150,12 @@ def merge_pair(saved: dict | None, new: dict) -> dict:
     out = {**new, "candidates": list(candidates.values())}
     if new.get("composer") is None and saved:
         out["composer"] = saved.get("composer")
-    valid = [i for i, c in enumerate(out["candidates"]) if c["recipe"] and c["critic"] and c["critic"]["valid"]]
-    out["best"] = max(valid, key=lambda i: out["candidates"][i]["critic"]["score"]) if valid else None
+    out["best"] = best_index(out["candidates"])
     return out
 
 
 def _pair(a, b, out: list[dict], meta: dict | None) -> dict:
-    valid = [i for i, c in enumerate(out) if c["critic"] and c["critic"]["valid"]]
-    best = max(valid, key=lambda i: out[i]["critic"]["score"]) if valid else None
-    return {"out_track": a.id, "in_track": b.id, "facts": pair_facts(a, b), "composer": meta, "candidates": out, "best": best}
+    return {"out_track": a.id, "in_track": b.id, "facts": pair_facts(a, b), "composer": meta, "candidates": out, "best": best_index(out)}
 
 
 def _candidates(raw: list[tuple[str, dict]], a, b, options: dict) -> list[dict]:
@@ -122,7 +186,8 @@ def main() -> None:
     ap.add_argument("--composer", choices=["rules", "llm", "both"], default="rules")
     ap.add_argument("--pairs", nargs="*", default=[], help="OUT:IN track-id prefixes, e.g. demo-amber:demo-teal")
     ap.add_argument("--max-pairs", type=int, help="compose at most this many pairs (required for the LLM without --pairs)")
-    ap.add_argument("--candidates", type=int, default=4, help="LLM candidates per pair")
+    ap.add_argument("--candidates", type=int, default=3, help="LLM ideas in the first draft (the strongest is refined)")
+    ap.add_argument("--refine", type=int, default=2, help="revision rounds on the best idea (0 = keep every draft as is)")
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--effort", default="high", choices=["low", "medium", "high", "xhigh", "max"])
     ap.add_argument("--estimate", action="store_true", help="print the request size and a rough cost; make no calls")
@@ -168,7 +233,7 @@ def main() -> None:
         pairs = []
     spent, llm_total, llm_ok = 0.0, 0, 0
     for a, b in pairs:
-        fresh = plan_pair(a, b, args.composer, composer, args.candidates, **options)
+        fresh = plan_pair(a, b, args.composer, composer, args.candidates, args.refine, **options)
         r = results[(a.id, b.id)] = merge_pair(results.get((a.id, b.id)), fresh)
         meta = fresh["composer"] or {}
         if not meta.get("cached"):
@@ -178,6 +243,8 @@ def main() -> None:
         llm_ok += sum(c["recipe"] is not None for c in llm)
         best = r["candidates"][r["best"]] if r["best"] is not None else None
         note = f" [LLM: {meta['error']}]" if meta.get("error") else (" [LLM cached]" if meta.get("cached") else "")
+        if meta.get("rounds"):
+            note += " [rounds: " + " -> ".join("x" if x.get("score") is None else f"{x['score']:g}" for x in meta["rounds"]) + "]"
         print(f"{a.title[:22]:>22} -> {b.title[:22]:<22} " + (f"{best['critic']['score']:5.1f} {best['source']:5} {best['idea'][:40]}" if best else "  no valid candidate") + note)
 
     doc = {"schema_version": TRANSITIONS_VERSION, "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),

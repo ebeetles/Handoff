@@ -33,7 +33,7 @@ with sync_playwright() as p:
     pg.get_by_label("Composer exit phrase").select_option(str(EXIT))
     pg.get_by_label("Composer duration").select_option("16")
     t0 = time.time()
-    pg.get_by_role("button", name="Compose four ideas").click()
+    pg.get_by_role("button", name="Compose transition").click()
     pg.wait_for_selector("dialog", state="detached", timeout=300000)
     print(f"composed in {time.time() - t0:.0f} s; picked:", pg.get_by_label("Transition recipe").input_value())
     pair = pg.evaluate("""() => { const a = window.__handoff.engine.snapshot('A'), b = window.__handoff.engine.snapshot('B');

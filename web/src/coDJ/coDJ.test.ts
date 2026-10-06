@@ -100,6 +100,17 @@ describe("composed transitions (contract C6)", () => {
     expect(list[0]!.recipe!.anchor!.out_track).toBe(p.out_track);
     expect(playable(transitionsFixture, p.in_track, p.out_track)).toEqual([]);   // ordered pairs
   });
+  it("lists Claude's compositions before the rules baseline, each best first", () => {
+    const t: unknown = structuredClone(transitionsFixture);
+    assertTransitions(t);
+    const cs = t.pairs[0]!.candidates.filter((c) => c.recipe && c.critic?.valid);
+    const low = { ...structuredClone(cs[cs.length - 1]!), id: "llm_low", source: "llm" as const };
+    low.critic = { ...low.critic!, score: 50 };
+    t.pairs[0]!.candidates.push(low);
+    const list = playable(t, t.pairs[0]!.out_track, t.pairs[0]!.in_track);
+    expect(list[0]!.id).toBe("llm_low");
+    expect(list.slice(1).map((c) => c.critic!.score)).toEqual([...list.slice(1).map((c) => c.critic!.score)].sort((x, y) => y - x));
+  });
   it("rejects a wrong version", () => {
     expect(() => assertTransitions({ ...transitionsFixture, schema_version: 999 })).toThrow(/schema_version 3/);
   });

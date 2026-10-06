@@ -44,7 +44,7 @@ What makes a transition good:
   * Tempo ride: glide A to B's tempo under drums-only or filtered bars (A's pitch slides with it), then blend as usual.
   * Hard switch on the one for a genre change: build tension (loop_roll, highpass, gate), then brake or echo-cut A and land B on its drop or a high-energy phrase. Energy should carry over: don't drop from a peak into an ambient intro.
   * Half/double time: a sync multiplier of 0.5 or 2 means the beats line up at half or double time (e.g. 140 dubstep with 70-ish hip-hop, 174 drum & bass with 87).
-- Choose a clean fallback alongside adventurous options when the facts make that necessary. Don't add moves merely to appear complex. Never invent audible lyrics, instruments, drops or keys not supported by the facts. You receive analysis, not the audio itself.
+- Choose a clean fallback alongside adventurous options when the facts make that necessary. Don't add moves merely to appear complex: a plan over 10 moves loses points as hard to follow. Never invent audible lyrics, instruments, drops or keys not supported by the facts. You receive analysis, not the audio itself.
 
 Rules the board enforces (a plan that breaks one is thrown away):
 - out_start_bar is one of the pair's exit_bars; from_bar is a multiple of 4 and inside B (entry_bars are good choices).
@@ -55,7 +55,9 @@ Rules the board enforces (a plan that breaks one is thrown away):
 - rhythmic_gate owns that deck's volume lane for its entire interval (including endpoints); put volume moves and cutting echo throws outside it. Gate length <= 8 bars. No overlapping loop_roll intervals. A plan <= 64 moves and ends within constraints.max_bars.
 - Steps on the incoming deck before it enters become its initial state. filter_sweep open requires a preceding close. Echo throw builds in the bar before its at_bar; don't put throws less than 2 bars apart. Quarter-bar move times are one beat; do not invent unsupported effects such as reverse playback, reverb or pitch lock.
 
-Write the number of candidates asked for, each a different idea rather than a variation of one, and give each a rationale that cites the facts you used."""
+Write the number of candidates asked for, each a different idea rather than a variation of one, and give each a rationale that cites the facts you used. When asked for one, put everything into making it the best transition these two tracks allow.
+
+Revisions: the board compiles your plan and simulates the mix, then may send back its compiler errors and the critic's findings (with transition bar numbers). Then return exactly one candidate: the same transition, improved. Fix every compiler error. Address each critic finding by changing the moves around those bars, unless it is deliberate and musically right (a planned one-beat breath before a drop is not a mistake); say so in the rationale. Keep what already works, and don't trade a fixed problem for a new one: make the smallest targeted change (move a crossfade, shift an entry, mute a stem) rather than rewriting or adding moves. Findings listed as unavoidable come from the tracks themselves; don't chase them."""
 
 
 def load_api_key() -> str | None:
@@ -97,7 +99,10 @@ class Composer:
         self.calls = 0   # network calls actually made (0 on a warm cache)
 
     def params(self, a: TrackData, b: TrackData, n: int, *, brief: str = "Creative, energetic, track-specific transitions",
-               out_start_bar: int | None = None, min_start_bar: int = 0, max_bars: int = 32) -> dict:
+               out_start_bar: int | None = None, min_start_bar: int = 0, max_bars: int = 32,
+               history: list[tuple[dict, dict]] | None = None) -> dict:
+        """history: earlier rounds, as (the candidate Claude wrote, the board's feedback on it).
+        Each becomes an assistant turn and a user turn, so a revision sees the whole conversation."""
         if not 1 <= n <= 6 or not 4 <= max_bars <= 32 or min_start_bar < 0 or len(brief) > 500:
             raise ValueError("Invalid composition limits")
         facts = pair_facts(a, b)
@@ -114,7 +119,7 @@ class Composer:
             "thinking": {"type": "adaptive"},
             "output_config": {"effort": self.effort, "format": {"type": "json_schema", "schema": PLAN_SCHEMA}},
             "system": [{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
-            "messages": [{"role": "user", "content": user}],
+            "messages": [{"role": "user", "content": user}, *revision_turns(history or [])],
         }
 
     def compose(self, a: TrackData, b: TrackData, n: int = 4, **options) -> tuple[list[dict], dict]:
@@ -162,3 +167,12 @@ class Composer:
                                   "meta": meta, "candidates": candidates}, indent=1))
         tmp.replace(path)
         return candidates, meta
+
+
+def revision_turns(history: list[tuple[dict, dict]]) -> list[dict]:
+    turns = []
+    for cand, feedback in history:
+        turns.append({"role": "assistant", "content": json.dumps({"candidates": [cand]}, sort_keys=True)})
+        turns.append({"role": "user", "content": json.dumps({"revise": "Return one candidate: this transition, improved.",
+                                                             "feedback": feedback}, sort_keys=True)})
+    return turns

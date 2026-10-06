@@ -35,9 +35,9 @@ with sync_playwright() as p:
     page.get_by_label("Composer duration").select_option("8")
     page.get_by_label("Creative direction").fill("Rhythmic percussion relay with a big reveal")
     page.screenshot(path="/tmp/handoff-composer.png")
-    page.get_by_role("button", name="Compose four ideas").click()
+    page.get_by_role("button", name="Compose transition").click()
     page.wait_for_selector("dialog", state="detached")
-    assert len(requests) == 1 and requests[0]["out_start_bar"] == 16 and requests[0]["max_bars"] == 8
+    assert len(requests) == 1 and requests[0]["out_start_bar"] == 16 and requests[0]["max_bars"] == 8 and requests[0]["candidates"] == 3
     assert requests[0]["out_track"] == PAIR["out_track"] and requests[0]["in_track"] == PAIR["in_track"]
     assert page.get_by_label("Transition recipe").input_value() == RECIPE["id"]
     assert not page.evaluate("() => window.__handoff.engine.snapshot('A').playing")

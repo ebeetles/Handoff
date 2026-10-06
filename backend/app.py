@@ -26,6 +26,9 @@ from handoff_pipeline.compose.facts import load_track  # noqa: E402
 from plan_transitions import SCHEMA, TRANSITIONS_VERSION, load_saved, merge_pair, plan_pair  # noqa: E402
 
 
+REFINE_ROUNDS = 2   # draft `candidates` ideas, keep the strongest, revise it up to twice; one transition comes back
+
+
 class ComposeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     schema_version: Literal[1]
@@ -34,7 +37,7 @@ class ComposeRequest(BaseModel):
     out_start_bar: int | None = Field(default=None, ge=0)
     min_start_bar: int = Field(default=0, ge=0)
     max_bars: int = Field(default=16, ge=4, le=32)
-    candidates: int = Field(default=4, ge=1, le=6)
+    candidates: int = Field(default=3, ge=1, le=6)
     brief: str = Field(default="Creative, energetic, track-specific transitions", max_length=500)
 
 
@@ -61,7 +64,7 @@ def create_app(library: Path = ROOT / "web/public/library", composer: Composer |
         try:
             a, b = (load_track(p) for p in paths)
             options = body.model_dump(exclude={"schema_version", "out_track", "in_track", "candidates"})
-            pair = plan_pair(a, b, "llm", comp, body.candidates, **options)
+            pair = plan_pair(a, b, "llm", comp, body.candidates, REFINE_ROUNDS, **options)
             if pair["composer"] and pair["composer"].get("error"):
                 raise HTTPException(502, pair["composer"]["error"])
             doc = {"schema_version": TRANSITIONS_VERSION, "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),

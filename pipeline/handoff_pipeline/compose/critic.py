@@ -91,6 +91,19 @@ def _parts(t: TrackData, i: int, st: dict, pb: dict) -> tuple[float, float]:
     return max(lv["bass"], lv["other"], lv["vocals"]), max(lv[s] * w for s, w in RHYTHM.items())
 
 
+def _at(xs: list[float]) -> str:
+    """Where, in transition bars: " (bars 4-6, 12-13)" from the simulation steps that hit. Hits
+    under half a bar apart join one span (a gate's chops would otherwise list every half beat)."""
+    spans: list[list[float]] = []
+    for x in xs:
+        if spans and x - spans[-1][1] <= 0.5 + 1e-9:
+            spans[-1][1] = x
+        else:
+            spans.append([x, x])
+    parts = [f"{a:g}" if b - a < STEP / 2 else f"{a:g}-{b + STEP:g}" for a, b in spans[:4]]
+    return f" (bar{'s' if len(spans) > 1 or spans[0][1] > spans[0][0] else ''} {', '.join(parts)}{', ...' if len(spans) > 4 else ''})" if spans else ""
+
+
 def critique(recipe: dict, a: TrackData, b: TrackData, n_moves: int = 0) -> dict:
     anc, length = recipe["anchor"], recipe["bars"]
     start, fb = anc["out_start_bar"], anc["in_from_bar"]
@@ -113,6 +126,7 @@ def critique(recipe: dict, a: TrackData, b: TrackData, n_moves: int = 0) -> dict
     m = {"bass_clash_bars": 0.0, "vocal_clash_bars": 0.0, "key_clash_bars": 0.0, "rhythm_clash_bars": 0.0,
          "ride_tonal_bars": 0.0, "dip_bars": 0.0, "spike_bars": 0.0, "overlap_bars": 0.0, "clean_overlap_bars": 0.0,
          "locked": locked, "vocals_known": a.vocals is not None and b.vocals is not None}
+    where: dict[str, list[float]] = {k: [] for k in ("bass_clash", "vocal_clash", "key_clash", "rhythm_clash", "dip", "spike")}
     ride = [p[0] for p in next((l["points"] for l in recipe["lanes"] if l["deck"] == "out" and l["control"] == "tempo"), [])]
     ride_span = (min(ride), max(ride)) if ride else None
     ref_a = float(np.median(a.rms_db[max(0, start - 4):start + 1]))
@@ -150,9 +164,11 @@ def critique(recipe: dict, a: TrackData, b: TrackData, n_moves: int = 0) -> dict
             clash = False
             if a.low[ia] * sa["bass_gain"] > STRONG and b.low[ib] * sb["bass_gain"] > STRONG:
                 m["bass_clash_bars"] += STEP
+                where["bass_clash"].append(x)
                 clash = True
             if m["vocals_known"] and a.vocals[ia] * sa["vocal_gain"] > STRONG and b.vocals[ib] * sb["vocal_gain"] > STRONG:
                 m["vocal_clash_bars"] += STEP
+                where["vocal_clash"].append(x)
                 clash = True
             tonal_b, rhythm_b = _parts(b, ib, sb, pb)
             pitched = STRONG if a.presence is not None and b.presence is not None else 0.25
@@ -160,19 +176,23 @@ def critique(recipe: dict, a: TrackData, b: TrackData, n_moves: int = 0) -> dict
                 unit = tonal_clash(a.camelot, b.camelot, pitch_offset(rate_a(x), rate_b))
                 if unit > 0:
                     m["key_clash_bars"] += STEP * unit
+                    where["key_clash"].append(x)
                     clash = True
             # Without stems there's no telling a beat from a pad: any unlocked overlap counts.
             known = a.presence is not None and b.presence is not None
             if not locked and both and (not known or rhythm_a > STRONG and rhythm_b > STRONG):
                 m["rhythm_clash_bars"] += STEP
+                where["rhythm_clash"].append(x)
                 clash = True
             if both and not clash:
                 m["clean_overlap_bars"] += STEP
         total = 10 * math.log10(power + 1e-12)
         if total < lo:
             m["dip_bars"] += STEP
+            where["dip"].append(x)
         elif total > hi:
             m["spike_bars"] += STEP
+            where["spike"].append(x)
         x += STEP
 
     pen, reasons, valid = {}, [], True
@@ -181,28 +201,28 @@ def critique(recipe: dict, a: TrackData, b: TrackData, n_moves: int = 0) -> dict
         reasons.append("The plan beatmatches the tracks, but their tempos can't be locked (drifting or too far apart).")
     if m["rhythm_clash_bars"] >= 0.5:
         valid = False
-        reasons.append(f"Two beats that aren't locked play together for {m['rhythm_clash_bars']:g} bars: a train wreck.")
+        reasons.append(f"Two beats that aren't locked play together for {m['rhythm_clash_bars']:g} bars{_at(where['rhythm_clash'])}: a train wreck.")
     if m["bass_clash_bars"]:
         pen["bass_clash"] = W["bass_clash"] * m["bass_clash_bars"]
-        reasons.append(f"Both basslines are up together for {m['bass_clash_bars']:g} bars.")
+        reasons.append(f"Both basslines are up together for {m['bass_clash_bars']:g} bars{_at(where['bass_clash'])}.")
     if m["vocal_clash_bars"]:
         pen["vocal_clash"] = W["vocal_clash"] * m["vocal_clash_bars"]
-        reasons.append(f"Two vocals overlap for {m['vocal_clash_bars']:g} bars.")
+        reasons.append(f"Two vocals overlap for {m['vocal_clash_bars']:g} bars{_at(where['vocal_clash'])}.")
     if m["key_clash_bars"]:
         pen["key_clash"] = W["key_clash"] * m["key_clash_bars"]
         semis = pitch_offset(rate_a(enter), rate_b)
         heard = f" (B sounds {semis:+.1f} semitones off its key at this tempo)" if abs(semis) > 0.2 else ""
-        reasons.append(f"The keys ({a.camelot}, {b.camelot}{heard}) clash while both melodies are up.")
+        reasons.append(f"The keys ({a.camelot}, {b.camelot}{heard}) clash while both melodies are up{_at(where['key_clash'])}.")
     if m["ride_tonal_bars"]:
         semis = abs(pitch_offset(1.0, rate_a(ride_span[1])))
         pen["ride_pitch"] = W["ride_pitch"] * semis * m["ride_tonal_bars"]
         reasons.append(f"A's melody slides {semis:.1f} semitones during the tempo ride.")
     if m["dip_bars"] > 1:
         pen["dip"] = W["dip"] * (m["dip_bars"] - 1)
-        reasons.append(f"The level drops away for {m['dip_bars']:g} bars.")
+        reasons.append(f"The level drops away for {m['dip_bars']:g} bars{_at(where['dip'])}.")
     if m["spike_bars"] > 1:
         pen["spike"] = W["spike"] * (m["spike_bars"] - 1)
-        reasons.append(f"The level jumps up for {m['spike_bars']:g} bars.")
+        reasons.append(f"The level jumps up for {m['spike_bars']:g} bars{_at(where['spike'])}.")
     if fb not in {p["start_bar"] for p in b.phrases}:
         pen["mid_phrase_entry"] = W["mid_phrase_entry"]
         reasons.append(f"B comes in at bar {fb}, mid-phrase.")

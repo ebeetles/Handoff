@@ -497,7 +497,8 @@ def test_rerunning_the_planner_keeps_earlier_compositions(tmp_path):
     assert {c["source"] for c in merged["candidates"]} == {"llm", "rules"} and merged["composer"] == paid["composer"]
     assert len(P.merge_pair(merged, rules)["candidates"]) == len(merged["candidates"])     # idempotent
     best = merged["candidates"][merged["best"]]
-    assert best["critic"]["score"] == max(c["critic"]["score"] for c in merged["candidates"] if c["critic"] and c["critic"]["valid"])
+    assert best["source"] == "llm"          # by ear, a composition beat a higher-scored rules drum bridge
+    assert any(c["source"] == "rules" and c["critic"]["score"] > best["critic"]["score"] for c in merged["candidates"] if c["critic"])
 
 
 def test_a_brake_can_hand_over_on_the_bar_a_stops():
@@ -512,3 +513,71 @@ def test_a_brake_can_hand_over_on_the_bar_a_stops():
     assert critique(r, a, b, len(moves))["valid"]
     late = [*moves[:2], {"move": "in_enter", "at_bar": 9, "from_bar": 16}, *moves[3:]]
     assert any("after out_stop" in e for e in compile_plan(plan(late, start=64), a, b, "c")[1])
+
+
+# ---------------------------------------------------------------- one transition, refined
+
+def scripted(replies):
+    """A fake Claude that answers each call with the next plan in `replies`."""
+    calls = []
+
+    def send(params):
+        calls.append(params)
+        c = replies[min(len(calls), len(replies)) - 1]
+        return {"text": json.dumps({"candidates": [c]}), "stop_reason": "end_turn", "model": params["model"],
+                "usage": {"input_tokens": 1000, "output_tokens": 500}}
+    return send, calls
+
+
+MUDDY = [ENTER, {"move": "crossfade", "start_bar": 0, "end_bar": 2, "to": 0.5, "shape": "ramp"},
+         {"move": "crossfade", "start_bar": 14, "end_bar": 16, "to": 1, "shape": "ramp"}, STOP16]
+SWAPPED = MUDDY[:3] + [{"move": "bass_swap", "at_bar": 8}] + MUDDY[3:]
+
+
+def bassy():
+    a, b = track(bass=1.0), track("b", bass=1.0)
+    a.low[96:], b.low[:16] = 0.9, 0.9
+    return a, b
+
+
+def test_one_transition_is_drafted_checked_and_revised_until_it_is_good(tmp_path):
+    import plan_transitions as P
+    a, b = bassy()
+    broken = plan([ENTER, STOP16], idea="Draft")                   # never crossfades: doesn't compile
+    send, calls = scripted([broken, plan(MUDDY, idea="Muddy"), plan(SWAPPED, idea="Swapped")])
+    pair = P.plan_pair(a, b, "llm", C.Composer(tmp_path, transport=send), 1, refine=2)
+    assert len(calls) == 3 and [c["idea"] for c in pair["candidates"]] == ["Swapped"]
+    second = calls[1]["messages"]
+    assert [m["role"] for m in second] == ["user", "assistant", "user"]
+    fb = json.loads(second[2]["content"])["feedback"]
+    assert fb["compiled"] is False and any("never moves to B" in e for e in fb["errors"])
+    fb = json.loads(calls[2]["messages"][4]["content"])["feedback"]
+    assert fb["compiled"] and "bass_clash" in fb["penalties"] and any("(bars " in f for f in fb["findings"])
+    meta = pair["composer"]
+    assert [r["round"] for r in meta["rounds"]] == [0, 1, 2] and meta["kept_round"] == 2
+    assert meta["usage"]["output_tokens"] == 1500 and pair["best"] == 0
+    again = C.Composer(tmp_path, transport=send)                   # rerun: every round comes from the cache
+    assert P.plan_pair(a, b, "llm", again, 1, refine=2)["candidates"][0]["idea"] == "Swapped" and again.calls == 0
+
+
+def test_a_good_draft_is_not_revised_and_a_worse_revision_never_wins(tmp_path):
+    import plan_transitions as P
+    a, b = bassy()
+    send, calls = scripted([plan(SWAPPED, idea="Clean")])
+    clean = P.plan_pair(a, b, "llm", C.Composer(tmp_path / "1", transport=send), 1, refine=2)
+    assert P.good_enough(clean["candidates"][0]) and len(calls) == 1
+    send, calls = scripted([plan(MUDDY, idea="Muddy"), plan([ENTER, STOP16], idea="Broken"), plan([XF, STOP16], idea="Worse")])
+    pair = P.plan_pair(a, b, "llm", C.Composer(tmp_path / "2", transport=send), 1, refine=2)
+    assert len(calls) == 3 and pair["candidates"][0]["idea"] == "Muddy" and pair["composer"]["kept_round"] == 0
+
+
+def test_unavoidable_penalties_are_flagged_not_chased():
+    """Live (Protohype -> Morgan Page, 145 vs 125): 'B is stretched 7%' comes from the tempos.
+    Claude was asked to fix it and piled on moves (82.6 -> 66.6)."""
+    import plan_transitions as P
+    c = {"recipe": {"id": "r"}, "errors": [], "critic": {"valid": True, "score": 88.0, "reasons": ["B is stretched 7%"],
+                                                "breakdown": {"stretch": -4.0, "clean_blend": 2.0}}}
+    fb = P.feedback(c)
+    assert fb["penalties"] == {} and "stretch" in fb["unavoidable"] and P.good_enough(c)
+    c["critic"]["breakdown"]["dip"] = -3.0
+    assert P.feedback(c)["penalties"] == {"dip": -3.0} and not P.good_enough(c)

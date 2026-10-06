@@ -30,7 +30,7 @@ with sync_playwright() as p:
     page.get_by_role("button", name="Compose with AI", exact=True).click()
     page.get_by_label("Composer exit phrase").select_option("16")
     page.get_by_label("Composer duration").select_option("8")
-    page.get_by_role("button", name="Compose four ideas").click()
+    page.get_by_role("button", name="Compose transition").click()
     page.wait_for_selector("dialog", state="detached")
     assert page.get_by_label("Transition recipe").input_value() == RECIPE["id"]
     page.evaluate("""() => {

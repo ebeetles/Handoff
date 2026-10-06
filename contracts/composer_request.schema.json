@@ -47,7 +47,7 @@
       "type": "integer"
     },
     "candidates": {
-      "default": 4,
+      "default": 3,
       "maximum": 6,
       "minimum": 1,
       "title": "Candidates",

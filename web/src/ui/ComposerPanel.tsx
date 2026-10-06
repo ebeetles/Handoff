@@ -44,16 +44,16 @@ export function ComposerPanel({ out, inn, onClose, onPick }: {
     if (exit === null || passed) return;
     abort.current = new AbortController();
     setWorking(true);
-    setMessage("Composing and checking four ideas. This can take a minute or two; playback continues.");
+    setMessage("Drafting three ideas, keeping the strongest, then checking and refining it. This usually takes 1–3 minutes; playback continues.");
     try {
       const doc = await composeLive({ schema_version: 1, out_track: out.trackId, in_track: inn.trackId,
         out_start_bar: exit, min_start_bar: Math.max(0, Math.ceil(out.barPos + 1)), max_bars: bars,
-        candidates: 4, brief }, abort.current.signal);
+        candidates: 3, brief }, abort.current.signal);
       transitions.merge(doc);
       const pair = doc.pairs[0]!;
       if (pair.best === null) {
         const reasons = pair.candidates.flatMap((c) => [...c.errors, ...(c.critic?.valid === false ? c.critic.reasons : [])]);
-        setMessage(`No playable plan passed the checks. ${reasons.slice(0, 2).join("; ")} Try another phrase or brief.`);
+        setMessage(`The transition didn't pass the checks after refining. ${reasons.slice(0, 2).join("; ")} Try another phrase or brief.`);
         return;
       }
       onPick(pair.candidates[pair.best]!.recipe!.id);
@@ -86,11 +86,11 @@ export function ComposerPanel({ out, inn, onClose, onPick }: {
       <label>Creative direction
         <textarea aria-label="Creative direction" value={brief} maxLength={500} rows={3} disabled={working} onChange={(e) => setBrief(e.target.value)} />
       </label>
-      <p className="composer-hint">Choose any phrase, including the middle of the track. The composer chooses an entry in the other track. Review an idea, then press Try transition.</p>
+      <p className="composer-hint">Choose any phrase, including the middle of the track. The composer chooses an entry in the other track, then checks and refines its plan. Review it, then press Try transition.</p>
       <p className="composer-hint">If playback passes your chosen phrase while composing, choose a later phrase and compose again.</p>
       <div role="status" className="composer-message">{passed && !working ? "That phrase has passed. Choose a later one." : message}</div>
       <button className="text-button" type="submit" disabled={working || exit === null || passed || !track}>
-        {working ? "Composing…" : "Compose four ideas"}
+        {working ? "Composing…" : "Compose transition"}
       </button>
     </form>
   </dialog>;
