@@ -7,6 +7,10 @@ Read `ROADMAP.md` first. It has the architecture, the contracts between parts, a
 1. **One chunk at a time.** Stay inside the chunk you were asked to build. If you need something from another chunk, use its contract. Don't reach into its internals.
 2. **Contracts are the seams.** These files define how the parts talk:
    - `contracts/track_analysis.schema.json` + `web/src/contracts/track.ts` + `contracts/fixtures/`
+   - `contracts/recipe.schema.json` + `contracts/recipes/` + `web/src/contracts/recipe.ts` (checked by `pipeline/tests/test_recipes.py` and `assertRecipe`)
+   - `contracts/transitions.schema.json` + `web/src/contracts/transitions.ts` + `contracts/fixtures/sample_transitions.json` (composed transitions, Chunk 7; regenerate fixtures with `pipeline/make_transition_fixtures.py`)
+   - `contracts/composer_request.schema.json` + `backend/app.py` (`ComposeRequest`) + `web/src/contracts/composer.ts` (live composer API; a test asserts the schema equals the server model)
+   - The moves vocabulary (`pipeline/handoff_pipeline/compose/moves.py`) is the composer's output format: changing a move means changing the compiler and its tests with it
    - `web/src/control/controls.ts` (control ids, 0..1 values), `web/src/control/commands.ts`
    - `web/src/input/gesture.ts` (`PointerSample`, `TargetSpec`)
 
@@ -21,6 +25,10 @@ cd pipeline && python -m pytest -q          # ground-truth analysis tests (~1 mi
 cd web && npm run typecheck && npm test     # strict TS + timing-math unit tests
 cd web && npm run dev                       # then, in another shell:
 python web/e2e/smoke.py                     # real-browser audio: launch, sync, loops, jumps, no errors
+python web/e2e/recipes.py                   # every transition recipe, played for real (~5 min)
+python web/e2e/composer.py                  # Compose with AI panel + a mid-track composed transition (canned reply, free)
+python web/e2e/ride_brake.py                # tempo ride, entry at B's own tempo, brake (canned reply, free)
+# Opt-in, costs one Claude call: python web/e2e/composer_live.py "With My Crew" "EvenFall" 32 --yes-spend
 ```
 
 The smoke test needs a library with two beatmatchable tracks. The demo tracks work: see README.

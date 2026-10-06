@@ -4,6 +4,8 @@ import { CommandBus } from "../control/commands";
 import { ControlStore } from "../control/controls";
 import { GestureController } from "../input/gesture";
 import { HandAdapter } from "../input/handAdapter";
+import { AutomationPlayer } from "../coDJ/automation";
+import { TransitionLibrary } from "../coDJ/transitions";
 import { attachKeyboard } from "../input/keyboard";
 import { attachPointerAdapter } from "../input/pointerAdapter";
 import { CameraPanel, CameraToggle } from "./CameraPanel";
@@ -12,6 +14,7 @@ import { ServicesContext, useServices, useSnapshots, type Services } from "./con
 import { DeckPanel } from "./DeckPanel";
 import { HandCursors } from "./HandCursors";
 import { Library } from "./Library";
+import { TransitionControls } from "./TransitionControls";
 import { Mixer } from "./Mixer";
 import { Waveform } from "./Waveform";
 
@@ -28,7 +31,10 @@ function getServices(): Services {
     const engine = new AudioEngine(store, bus, LIBRARY_BASE);
     const gestures = new GestureController(store, bus.dispatch);
     const hands = new HandAdapter(gestures, HAND_MODEL_URL);
-    services = { store, bus, engine, gestures, hands };
+    const coDJ = new AutomationPlayer(engine, store, bus.dispatch);
+    const transitions = new TransitionLibrary(LIBRARY_BASE);
+    void transitions.load();
+    services = { store, bus, engine, gestures, hands, coDJ, transitions };
     // Dev-only debug handle for browser tests and poking at state from the console.
     if (import.meta.env.DEV) (window as unknown as { __handoff: Services }).__handoff = services;
   }
@@ -61,7 +67,10 @@ function Booth() {
     <div className="app">
       <header className="topbar">
         <div className="wordmark">Handoff<span>DJ board</span></div>
-        <div className="notice" role="status">{snap.notice}</div>
+        <div className="topbar-center">
+          <TransitionControls />
+          <div className="notice" role="status">{snap.notice}</div>
+        </div>
         <div className="topbar-right">
           <ToggleChip id="quantize" label="Snap to beat" />
           <Knob id="master" label="Master" size={40} />

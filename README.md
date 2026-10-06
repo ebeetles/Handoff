@@ -20,7 +20,7 @@ npm install
 npm run dev          # open http://localhost:5173, then Library -> load a track on each deck
 ```
 
-**Your own music.** Put files in `pipeline/tracks/` and rerun `preprocess.py`. Add `--stems` to split drums, bass, vocals, and melody with Demucs (`pip install demucs` first). It's slow on CPU, so expect a few minutes per track, but it only runs once per track. If a track's phrase lines look one beat off, add `{"Your File.mp3": {"downbeat_shift": 1}}` to `pipeline/overrides.json` and rerun with `--force`.
+**Your own music.** Put files in `pipeline/tracks/` and rerun `preprocess.py`. Add `--stems` to split drums, bass, vocals, and melody with Demucs (`pip install demucs` first; add `--only "Artist"` to do one track). It takes about 10 s per track on an Apple-silicon Mac, and later runs keep the stems it made. If a track's phrase lines look one beat off, add `{"Your File.mp3": {"downbeat_shift": 1}}` to `pipeline/overrides.json` and rerun with `--force`.
 
 **Real tracks from Audius.** `fetch_audius.py` downloads tracks whose artists have enabled downloads, saves them to `pipeline/tracks/` as `Artist - Title.<ext>`, and records title, artist, license, and credit (artist + Audius URL) in `pipeline/overrides.json`. It only adds keys that are missing, so your own fixes are never overwritten. Tracks that aren't downloadable, or are gated behind a follow/tip/purchase, are skipped and listed.
 
@@ -41,6 +41,10 @@ An API key is optional (it raises rate limits). Get one at [api.audius.co/plans]
 3. Press Sync on B (`L`). Tempo matches and the kicks line up on the waveforms.
 4. Watch the phrase rings. Start a crossfade when A's ring is about to complete.
 5. Mute B's drums, then bring them back right on the phrase line.
+6. Compose a transition live: put `ANTHROPIC_API_KEY=...` in `pipeline/.env`, then start the local composer server next to `npm run dev`:
+   `pipeline/.venv/bin/python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000` (from the repo root; `pip install -r backend/requirements.txt` first). Load two tracks, press **Compose with AI**, choose where on the playing track to start (any phrase, mid-track included), a length, and a creative direction. Claude writes four ideas in about a minute (about $0.15); the best is pre-selected. Press **Try transition** to play it.
+7. Compose transitions for your library offline (Chunk 7): `cd pipeline && python plan_transitions.py` runs the free rules composer on every pair. To have Claude compose, put `ANTHROPIC_API_KEY=...` in `pipeline/.env` (gitignored) and run e.g. `python plan_transitions.py --composer both --max-pairs 3`; it prints what each run cost, and replies are cached so reruns are free. The picker then lists "Composed for this pair" first, best score first.
+8. Let the board do a transition: with A playing and B loaded (and paused), pick a recipe at the top (Bass swap, Filter handoff, Echo out, Loop roll, Drum bridge) and press **Try transition**. It starts on A's next phrase and plays itself on the board's own controls. Grab any control it's moving and that control is yours for the rest of the transition. If a recipe can't run (keys clash, tempos too far apart, no stems), it says why.
 
 Keyboard: `Q`/`P` play, `W`/`O` cue, `S`/`L` sync, `1`–`4` and `7`–`0` loops, arrow keys for the crossfader. Double-click any knob or fader to reset it.
 

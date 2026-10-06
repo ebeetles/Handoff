@@ -1,0 +1,90 @@
+{
+  "schema_version": 3,
+  "id": "filter_handoff",
+  "name": "Filter handoff",
+  "description": "The new track opens up from a muffled low-pass while the old one thins out through a rising high-pass, handing over the space.",
+  "bars": 16,
+  "requires": {
+    "stems": "none",
+    "beatmatchable": true,
+    "max_camelot_distance": 1
+  },
+  "events": [
+    {
+      "at_bar": 0,
+      "deck": "in",
+      "command": "play"
+    },
+    {
+      "at_bar": 16,
+      "deck": "out",
+      "command": "pause"
+    }
+  ],
+  "lanes": [
+    {
+      "deck": "in",
+      "control": "volume",
+      "points": [
+        [
+          0,
+          0.8
+        ]
+      ]
+    },
+    {
+      "deck": "in",
+      "control": "filter",
+      "points": [
+        [
+          0,
+          0.12
+        ],
+        [
+          8,
+          0.5
+        ]
+      ]
+    },
+    {
+      "deck": "out",
+      "control": "filter",
+      "points": [
+        [
+          0,
+          0.5
+        ],
+        [
+          8,
+          0.5
+        ],
+        [
+          16,
+          0.85
+        ]
+      ]
+    },
+    {
+      "deck": null,
+      "control": "xfader",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          6,
+          0.5
+        ],
+        [
+          10,
+          0.5
+        ],
+        [
+          16,
+          1
+        ]
+      ]
+    }
+  ]
+}

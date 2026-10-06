@@ -4,6 +4,8 @@ import type { ControlId, ControlStore, DeckId } from "../control/controls";
 import type { CommandBus } from "../control/commands";
 import type { GestureController, TargetSpec } from "../input/gesture";
 import type { HandAdapter } from "../input/handAdapter";
+import type { AutomationPlayer } from "../coDJ/automation";
+import type { TransitionLibrary } from "../coDJ/transitions";
 
 export interface Services {
   engine: AudioEngine;
@@ -11,6 +13,8 @@ export interface Services {
   bus: CommandBus;
   gestures: GestureController;
   hands: HandAdapter;
+  coDJ: AutomationPlayer;
+  transitions: TransitionLibrary;
 }
 
 export const ServicesContext = createContext<Services | null>(null);

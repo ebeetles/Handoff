@@ -21,6 +21,7 @@ GRID_FULL_WEIGHT = 0.25                   # full-band onsets help where there's 
 GRID_TEMPO_BAND = 0.04                    # +/- around the tracker tempo (its lags are 2.5% apart)
 GRID_COARSE_DRIFT_S = 0.004               # coarse period step = this much drift over the track
 GRID_FOLD_BINS = 240                      # phase bins per beat in the coarse search (~2 ms)
+ATTACK_WINDOW_BEATS = 1 / 8               # +/- window for the broadband (attack) phase
 DRIFT_SEGMENT_BEATS = 32                  # 8 bars per drift measurement
 DRIFT_MIN_SALIENCE = 1.6                  # kick-pulse max/mean below which a segment is skipped
 BAND_EDGES_HZ = (200.0, 2000.0)           # low < 200 <= mid < 2000 <= high
@@ -54,11 +55,14 @@ def _sample_env(env: np.ndarray, times: np.ndarray, sr: int, hop: int) -> np.nda
     return np.interp(times, frame_times, env, left=0.0, right=0.0)
 
 
-def grid_envelopes(y: np.ndarray, sr: int) -> tuple[np.ndarray, np.ndarray]:
+def grid_envelopes(y: np.ndarray, sr: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """High-res (PHASE_HOP) onset envelopes for grid fitting, each scaled to mean 1.
-    Returns (kick, score): kick = low-band (< GRID_LOW_HZ) onsets only; score = kick +
-    GRID_FULL_WEIGHT * full-band onsets. Hats and claps are loud in the full band and sit
-    on offbeats, so the kick band has to dominate or the grid locks half a beat late.
+    Returns (kick, score, full): kick = low-band (< GRID_LOW_HZ) onsets only; full =
+    full-band onsets (the attack you hear); score = kick + GRID_FULL_WEIGHT * full.
+    Hats and claps are loud in the full band and sit on offbeats, so the kick band has to
+    dominate the search for WHICH position is the beat (score). But a kick whose low end
+    swells peaks in the kick band tens of ms after its attack, so WHERE exactly the beat
+    is comes from full, searched only within ATTACK_WINDOW_BEATS (refine_phase).
 
     The 512/64 window keeps the envelope peak ~4 ms after the true attack (it was 28 ms
     with 2048). n_fft must be passed with S=: onset_strength otherwise centers as if
@@ -71,7 +75,7 @@ def grid_envelopes(y: np.ndarray, sr: int) -> tuple[np.ndarray, np.ndarray]:
     n = min(len(kick), len(full))
     kick = kick[:n] / (kick[:n].mean() + 1e-9)
     full = full[:n] / (full[:n].mean() + 1e-9)
-    return kick, kick + GRID_FULL_WEIGHT * full
+    return kick, kick + GRID_FULL_WEIGHT * full, full
 
 
 def _grid_times(a: float, b: float, duration_s: float) -> np.ndarray:
@@ -115,7 +119,19 @@ def fit_grid(env: np.ndarray, sr: int, duration_s: float, center_bpm: float) -> 
     return float(np.mod(fine_a[c], b)), b
 
 
-def grid_drift(kick: np.ndarray, score: np.ndarray, sr: int, a: float, b: float,
+def refine_phase(full: np.ndarray, sr: int, a: float, b: float, duration_s: float) -> float:
+    """Slide the grid within +/- ATTACK_WINDOW_BEATS to where the broadband onsets (attacks)
+    are strongest. The window is narrow enough that offbeat hats (1/2 beat) and 16ths (1/4)
+    can't pull it, wide enough to reach an attack ~50 ms before a swelling kick's low end
+    (seen on real tracks; 1/8 beat is 58 ms at 128 BPM)."""
+    beats = _grid_times(a, b, duration_s)
+    offsets = np.arange(-ATTACK_WINDOW_BEATS * b, ATTACK_WINDOW_BEATS * b + 1e-9, 0.0002)
+    t = (beats[None, :] + offsets[:, None]).ravel()
+    scores = _sample_env(full, t, sr, PHASE_HOP).reshape(len(offsets), -1).sum(axis=1)
+    return float(np.mod(a + offsets[int(np.argmax(scores))], b))
+
+
+def grid_drift(kick: np.ndarray, full: np.ndarray, sr: int, a: float, b: float,
                duration_s: float) -> list[dict]:
     """How far the global grid is from the music, segment by segment.
 
@@ -124,13 +140,16 @@ def grid_drift(kick: np.ndarray, score: np.ndarray, sr: int, a: float, b: float,
     on-beat kick: the kick profile peaks within a quarter beat of the grid, and its
     salience (max/mean) is >= DRIFT_MIN_SALIENCE. Segments without one (pad breakdowns;
     intros where the only low-end is offbeat bass, as in Zute) can't confirm or refute
-    the grid, so they're skipped. The offset is then the argmax of the score profile within
-    a quarter beat. It uses the envelope the grid was fitted to, so constant envelope
-    latency cancels, and the quarter-beat limit keeps offbeat hats from winning.
+    the grid, so they're skipped. The offset is then the argmax of the full-band (attack)
+    profile within ATTACK_WINDOW_BEATS: the same envelope and window refine_phase placed the
+    grid with, so constant envelope latency cancels. Measuring on the kick-weighted score
+    over a quarter beat instead jumped between a kick's attack and its late low-end swell
+    (or other elements) section by section, reading 50-100 ms of "drift" on steady tracks.
     Returns [{start_s, offset_ms (None if skipped), salience}]."""
     beats = _grid_times(a, b, duration_s)
     offsets = np.arange(-0.5 * b, 0.5 * b, 0.0005)
     near = np.abs(offsets) <= 0.25 * b
+    attack = np.abs(offsets) <= ATTACK_WINDOW_BEATS * b
     edge_bins = int(0.010 / 0.0005)
     out = []
     for s in range(0, len(beats), DRIFT_SEGMENT_BEATS):
@@ -139,12 +158,12 @@ def grid_drift(kick: np.ndarray, score: np.ndarray, sr: int, a: float, b: float,
             break
         t = (seg[None, :] + offsets[:, None]).ravel()
         k_prof = _sample_env(kick, t, sr, PHASE_HOP).reshape(len(offsets), -1).mean(axis=1)
-        s_prof = _sample_env(score, t, sr, PHASE_HOP).reshape(len(offsets), -1).mean(axis=1)
+        f_prof = _sample_env(full, t, sr, PHASE_HOP).reshape(len(offsets), -1).mean(axis=1)
         k_near = k_prof[near]
         k = int(np.argmax(k_near))
         salience = float(k_near[k] / (k_prof.mean() + 1e-9))
         interior = edge_bins <= k < len(k_near) - edge_bins   # a peak, not the shoulder of an offbeat bump
-        off = (float(offsets[near][int(np.argmax(s_prof[near]))] * 1000)
+        off = (float(offsets[attack][int(np.argmax(f_prof[attack]))] * 1000)
                if interior and salience >= DRIFT_MIN_SALIENCE else None)
         out.append({"start_s": float(seg[0]), "offset_ms": off, "salience": salience})
     return out
@@ -152,8 +171,8 @@ def grid_drift(kick: np.ndarray, score: np.ndarray, sr: int, a: float, b: float,
 
 def track_beats(y: np.ndarray, sr: int, duration_s: float, bpm_hint: float | None = None,
                 force_grid: str | None = None) -> dict:
-    """Fit a constant beat grid to the whole track (fit_grid), measure how far the music
-    drifts from it (grid_drift), and keep the grid if the worst drift is under
+    """Fit a constant beat grid to the whole track (fit_grid), move its phase onto the
+    attacks (refine_phase), measure how far the music drifts from it (grid_drift), and keep the grid if the worst drift is under
     BEATMATCHABLE_MAX_DRIFT_MS. Otherwise fall back to the raw tracked beats.
 
     The tracker only supplies the tempo the grid search is centered on (bpm_hint
@@ -169,9 +188,10 @@ def track_beats(y: np.ndarray, sr: int, duration_s: float, bpm_hint: float | Non
     ibi = np.diff(raw)
     ibi_cv = float(np.std(ibi) / np.mean(ibi))
 
-    kick, score = grid_envelopes(y, sr)
+    kick, score, full = grid_envelopes(y, sr)
     a, b = fit_grid(score, sr, duration_s, bpm_hint or float(np.atleast_1d(tempo)[0]))
-    segments = grid_drift(kick, score, sr, a, b, duration_s)
+    a = refine_phase(full, sr, a, b, duration_s)
+    segments = grid_drift(kick, full, sr, a, b, duration_s)
     measured = [abs(s["offset_ms"]) for s in segments if s["offset_ms"] is not None]
     max_drift_ms = max(measured) if measured else None
     beatmatchable = max_drift_ms is not None and max_drift_ms <= BEATMATCHABLE_MAX_DRIFT_MS

@@ -22,7 +22,7 @@ from . import analyze as A
 from .audio_io import (SERVE_SR, copy_provided_stems, file_hash, find_provided_stems, guess_title_artist,
                        separate_stems, slugify, to_flac)
 
-PIPELINE_VERSION = "0.2.0"
+PIPELINE_VERSION = "0.3.0"
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "contracts" / "track_analysis.schema.json"
 DEFAULT_PHRASE_BARS = 16
 
@@ -40,8 +40,8 @@ def process_track(src: Path, out_root: Path, overrides: dict, with_stems: bool, 
     tid = track_id_for(src)
     tdir = out_root / tid
     analysis_path = tdir / "analysis.json"
-    if analysis_path.exists() and not force:
-        existing = json.loads(analysis_path.read_text())
+    existing = json.loads(analysis_path.read_text()) if analysis_path.exists() else None
+    if existing and not force:
         has_stems = existing["audio"]["stems"] is not None
         wants_stems = with_stems or find_provided_stems(src) is not None
         if existing["meta"]["pipeline_version"] == PIPELINE_VERSION and (has_stems or not wants_stems):
@@ -53,14 +53,19 @@ def process_track(src: Path, out_root: Path, overrides: dict, with_stems: bool, 
     mix = audio_dir / "mix.flac"
     to_flac(src, mix)
 
-    stems = None
+    stems, stems_gain_db = None, None
     provided = find_provided_stems(src)
+    kept = existing["audio"] if existing and existing.get("schema_version") == 3 else None
     if provided:
         log(f"  stems   using provided stems from {provided.name}/")
-        stems = copy_provided_stems(provided, audio_dir)
+        stems, stems_gain_db = copy_provided_stems(provided, audio_dir), 0.0
     elif with_stems:
-        log("  stems   running Demucs (slow on CPU)...")
-        stems = separate_stems(mix, audio_dir)
+        log("  stems   running Demucs...")
+        stems, stems_gain_db = separate_stems(mix, audio_dir)
+    elif kept and kept["stems"] and all((tdir / p).exists() for p in kept["stems"].values()):
+        # Separation is slow: re-analysis keeps the stems already made (--stems separates again).
+        log("  stems   keeping the separated stems (pass --stems to separate again)")
+        stems, stems_gain_db = kept["stems"], kept["stems_gain_db"]
 
     # Analyze the exact file we serve.
     y, sr = librosa.load(mix, sr=A.ANALYSIS_SR, mono=True)
@@ -81,12 +86,12 @@ def process_track(src: Path, out_root: Path, overrides: dict, with_stems: bool, 
 
     title, artist = guess_title_artist(src)
     analysis = {
-        "schema_version": 2,
+        "schema_version": 3,
         "id": tid,
         "title": overrides.get("title", title),
         "artist": overrides.get("artist", artist),
         "source": {"filename": src.name, "license": overrides.get("license"), "credit": overrides.get("credit")},
-        "audio": {"mix": "audio/mix.flac", "stems": stems},
+        "audio": {"mix": "audio/mix.flac", "stems": stems, "stems_gain_db": stems_gain_db},
         "sample_rate": SERVE_SR,
         "duration_s": round(duration, 4),
         "tempo": {
@@ -96,7 +101,9 @@ def process_track(src: Path, out_root: Path, overrides: dict, with_stems: bool, 
             "beatmatchable": beat["beatmatchable"],
             "grid": beat["grid"],
         },
-        "beats": [round(float(t), 4) for t in beats],
+        # Microseconds: sync takes its rate from the local beat interval, and 0.1 ms rounding
+        # (+/-0.02 BPM) made synced decks drift ~0.2 ms/s.
+        "beats": [round(float(t), 6) for t in beats],
         "beats_per_bar": A.BEATS_PER_BAR,
         "first_downbeat_index": int(fdi),
         "downbeat_confidence": round(db_conf, 3),

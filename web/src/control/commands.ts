@@ -1,6 +1,6 @@
 // Discrete actions (buttons/pads). Continuous values live in ControlStore; one-shot
 // actions are Commands. Every input source dispatches the same Command objects.
-import type { DeckId } from "./controls";
+import type { ControlId, DeckId } from "./controls";
 
 export type Command =
   | { type: "togglePlay"; deck: DeckId }
@@ -9,7 +9,13 @@ export type Command =
   | { type: "loop"; deck: DeckId; beats: number }   // same size again = exit loop
   | { type: "jump"; deck: DeckId; beats: number }
   | { type: "seekFraction"; deck: DeckId; fraction: number }
-  | { type: "load"; deck: DeckId; trackId: string };
+  | { type: "load"; deck: DeckId; trackId: string }
+  // Added for automation (Chunk 6). `at` is AudioContext time.
+  | { type: "playAt"; deck: DeckId; at: number; fromBar?: number }   // start exactly at `at`, from bar `fromBar` (default: the paused position's nearest bar line)
+  | { type: "pause"; deck: DeckId }                     // explicit (togglePlay would start a paused deck)
+  | { type: "loopOff"; deck: DeckId }                   // explicit exit (loop with the same beats toggles)
+  | { type: "setControlAt"; control: ControlId; value: number; at: number }   // exact-time step; the store follows at `at`
+  | { type: "brakeAt"; deck: DeckId; at: number; beats: number };            // turntable stop over `beats` beats from `at` (then pause it)
 
 export type CommandHandler = (cmd: Command) => void;
 

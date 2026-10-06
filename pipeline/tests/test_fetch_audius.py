@@ -80,3 +80,16 @@ def test_api_key_not_forwarded_to_content_node():
     same = h.redirect_request(req, io.BytesIO(), 302, "Found", email.message.Message(), "https://api.audius.co/v1/tracks/x")
     assert same.get_header("X-api-key") == "k"
     assert F.AudiusClient(None)._request("/tracks/x").get_header("X-api-key") is None
+
+
+def test_quality_reason_skips_mixes_skits_and_unplayed_uploads():
+    """2026-10-05: a genre search took the first downloadable hits: four 25-108 min DJ mixes, a
+    24 s skit, and little-played uploads the user rated "bacteria music". Filter on what the
+    API reports (duration in seconds, play_count)."""
+    ok = track(duration=210, play_count=5000)
+    assert F.quality_reason(ok, min_plays=1000, min_s=90, max_s=600) is None
+    assert "mix" in F.quality_reason(track(duration=6506, play_count=9e5), 0, 90, 600)
+    assert "too short" in F.quality_reason(track(duration=24, play_count=9e5), 0, 90, 600)
+    assert "plays" in F.quality_reason(track(duration=210, play_count=12), 1000, 90, 600)
+    assert F.quality_reason(track(duration=None, play_count=None), 0, 90, 600) is None   # unknown: don't guess
+    assert "plays" in F.quality_reason(track(duration=210, play_count=None), 1000, 90, 600)

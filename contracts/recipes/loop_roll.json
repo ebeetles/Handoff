@@ -1,0 +1,95 @@
+{
+  "schema_version": 3,
+  "id": "loop_roll",
+  "name": "Loop roll",
+  "description": "The old track stutters faster and faster (half, quarter, eighth beat) as a high-pass rises, then the new track drops on the phrase.",
+  "bars": 17,
+  "requires": {
+    "stems": "none",
+    "beatmatchable": true,
+    "max_camelot_distance": null
+  },
+  "events": [
+    {
+      "at_bar": 12,
+      "deck": "out",
+      "command": "loop",
+      "beats": 0.5
+    },
+    {
+      "at_bar": 14,
+      "deck": "out",
+      "command": "loop",
+      "beats": 0.25
+    },
+    {
+      "at_bar": 15,
+      "deck": "out",
+      "command": "loop",
+      "beats": 0.125
+    },
+    {
+      "at_bar": 16,
+      "deck": "out",
+      "command": "loop_off"
+    },
+    {
+      "at_bar": 16,
+      "deck": "in",
+      "command": "play"
+    },
+    {
+      "at_bar": 17,
+      "deck": "out",
+      "command": "pause"
+    }
+  ],
+  "lanes": [
+    {
+      "deck": "in",
+      "control": "volume",
+      "points": [
+        [
+          0,
+          0.8
+        ]
+      ]
+    },
+    {
+      "deck": "out",
+      "control": "filter",
+      "points": [
+        [
+          0,
+          0.5
+        ],
+        [
+          12,
+          0.5
+        ],
+        [
+          16,
+          0.8
+        ]
+      ]
+    },
+    {
+      "deck": null,
+      "control": "xfader",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          16,
+          0
+        ],
+        [
+          16,
+          1
+        ]
+      ]
+    }
+  ]
+}

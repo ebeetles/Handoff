@@ -1,7 +1,7 @@
-// Mirror of contracts/track_analysis.schema.json (v2). If you change one, change both,
+// Mirror of contracts/track_analysis.schema.json (v3). If you change one, change both,
 // bump schema_version, regenerate contracts/fixtures/, and run both test suites.
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const STEM_NAMES = ["drums", "bass", "vocals", "other"] as const;
 export type StemName = (typeof STEM_NAMES)[number];
 
@@ -14,12 +14,13 @@ export interface Section {
 }
 
 export interface TrackAnalysis {
-  schema_version: 2;
+  schema_version: 3;
   id: string;
   title: string;
   artist: string;
   source: { filename: string; license: string | null; credit: string | null };
-  audio: { mix: string; stems: Record<StemName, string> | null };
+  /** stems_gain_db: play the stems at this gain and they add back up to the mix (null: no stems). */
+  audio: { mix: string; stems: Record<StemName, string> | null; stems_gain_db: number | null };
   sample_rate: number;
   duration_s: number;
   tempo: { bpm: number; ibi_cv: number; max_drift_ms: number | null; beatmatchable: boolean; grid: "regular" | "tracked" };

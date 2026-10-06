@@ -88,26 +88,48 @@ def copy_provided_stems(stem_dir: Path, out_dir: Path) -> dict[str, str]:
     return paths
 
 
-def separate_stems(mix_flac: Path, out_dir: Path, model: str = "htdemucs") -> dict[str, str]:
-    """Run Demucs on the served mix and write FLAC stems next to it.
+STEM_HEADROOM_DB = 6.0
 
-    Demucs keeps sample alignment with its input, and we feed it the exact file we
-    serve, so stems line up sample-for-sample with the mix and the beat grid.
-    Slow on CPU (minutes per track); run it once and cache.
+
+def separate_stems(mix_flac: Path, out_dir: Path, model: str = "htdemucs") -> tuple[dict[str, str], float]:
+    """Run Demucs on the served mix and write FLAC stems next to it. Returns (paths, gain_db):
+    play the stems at +gain_db and they add back up to the mix.
+
+    Demucs keeps sample alignment with its input, and we feed it the exact file we serve, so
+    stems line up sample-for-sample with the mix and the beat grid. The input goes in
+    STEM_HEADROOM_DB down, with --clip-mode none: on loud masters a stem can peak above full
+    scale, and Demucs's default then scales that whole stem down (drums came out ~2 dB low,
+    breaking the sum). Integer FLAC can't hold > 1.0 either, so the headroom is stored and the
+    deck adds it back (analysis audio.stems_gain_db). DC offset is removed from the input and
+    from each stem: Demucs adds its input's mean back to every stem (4x the offset in the sum),
+    and muting a stem that carries DC steps the signal, a thump on every toggle. Slow on CPU.
     """
     try:
         import demucs  # noqa: F401
     except ImportError:
         sys.exit("--stems needs Demucs: pip install demucs  (first run also downloads model weights)")
+    import numpy as np
+    import soundfile as sf
     with tempfile.TemporaryDirectory() as tmp:
-        subprocess.run([sys.executable, "-m", "demucs", "-n", model, "-o", tmp, str(mix_flac)], check=True)
-        produced = Path(tmp) / model / mix_flac.stem
+        y, sr = sf.read(mix_flac, dtype="float32")
+        src = Path(tmp) / "input.wav"
+        sf.write(src, (y - y.mean(axis=0)) * 10 ** (-STEM_HEADROOM_DB / 20), sr, subtype="FLOAT")
+        subprocess.run([sys.executable, "-m", "demucs", "-n", model, "--clip-mode", "none", "--float32",
+                        "-o", tmp, str(src)], check=True)
+        produced = Path(tmp) / model / src.stem
         paths = {}
         for name in STEM_NAMES:
             wav = produced / f"{name}.wav"
             if not wav.exists():
                 sys.exit(f"Demucs did not produce {wav}. Check the model name and Demucs version.")
+            stem, stem_sr = sf.read(wav, dtype="float32")
+            stem -= stem.mean(axis=0)
+            peak = float(np.abs(stem).max())
+            if peak >= 0.999:
+                raise RuntimeError(f"{name} stem peaks at {peak:.2f} even with {STEM_HEADROOM_DB} dB headroom")
+            clean = Path(tmp) / f"{name}_clean.wav"
+            sf.write(clean, stem, stem_sr, subtype="FLOAT")
             dst = out_dir / f"stem_{name}.flac"
-            to_flac(wav, dst)
+            to_flac(clean, dst)
             paths[name] = f"audio/{dst.name}"
-    return paths
+    return paths, STEM_HEADROOM_DB

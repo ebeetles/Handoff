@@ -61,6 +61,18 @@ def test_bpm(library):
         assert results[name]["tempo"]["max_drift_ms"] < 5.0, name   # perfectly steady: only noise
 
 
+def test_regular_grid_is_stored_evenly_spaced(library):
+    """A regular grid's beats must survive serialization: sync takes the playback rate from
+    the local beat interval, so rounding to 0.1 ms (+/-0.02 BPM) drifted synced decks ~0.2 ms
+    per second (browser smoke test)."""
+    import numpy as np
+    _, results, _ = library
+    for name, a in results.items():
+        if a["tempo"]["grid"] == "regular":
+            ibi = np.diff(a["beats"])
+            assert np.ptp(ibi) < 4e-6, f"{name}: beat intervals vary by {np.ptp(ibi) * 1e3:.3f} ms"
+
+
 def test_downbeat_and_grid_phase(library):
     truth, results, _ = library
     for name, t in truth.items():

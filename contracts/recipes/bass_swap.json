@@ -1,0 +1,94 @@
+{
+  "schema_version": 3,
+  "id": "bass_swap",
+  "name": "Bass swap",
+  "description": "The new track comes in without its bass, and on bar 8 the basslines swap in one step, so the two never fight.",
+  "bars": 16,
+  "requires": {
+    "stems": "none",
+    "beatmatchable": true,
+    "max_camelot_distance": 1
+  },
+  "events": [
+    {
+      "at_bar": 0,
+      "deck": "in",
+      "command": "play"
+    },
+    {
+      "at_bar": 16,
+      "deck": "out",
+      "command": "pause"
+    }
+  ],
+  "lanes": [
+    {
+      "deck": "in",
+      "control": "volume",
+      "points": [
+        [
+          0,
+          0.8
+        ]
+      ]
+    },
+    {
+      "deck": "in",
+      "control": "eqLow",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          8,
+          0.5
+        ]
+      ]
+    },
+    {
+      "deck": "out",
+      "control": "eqLow",
+      "points": [
+        [
+          0,
+          0.5
+        ],
+        [
+          8,
+          0.5
+        ],
+        [
+          8,
+          0
+        ]
+      ]
+    },
+    {
+      "deck": null,
+      "control": "xfader",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          4,
+          0.5
+        ],
+        [
+          12,
+          0.5
+        ],
+        [
+          16,
+          1
+        ]
+      ]
+    }
+  ]
+}

@@ -3,6 +3,7 @@
     python fetch_audius.py https://audius.co/teixo/tropical-house-bandlab PkglRZ1
     python fetch_audius.py --search "deep house" --genre "Deep House" --limit 5
     python fetch_audius.py --search techno --limit 3 --dry-run
+    python fetch_audius.py --search "vocal house" --sort popular --min-plays 2000 --limit 5
 
 Only tracks the artist has marked downloadable (and that aren't download-gated) are
 fetched; everything else is skipped and reported. Files are saved as
@@ -64,6 +65,20 @@ def skip_reason(track: Track) -> str | None:
         return "not downloadable (artist hasn't enabled downloads)"
     if track.get("is_download_gated") or not (track.get("access") or {}).get("download", False):
         return "download is gated (follow/tip/purchase required)"
+    return None
+
+
+def quality_reason(track: Track, min_plays: int, min_s: float, max_s: float) -> str | None:
+    """Why a fetchable track isn't worth fetching, or None. A plain search returns DJ mixes,
+    skits and barely-played uploads; plays are a rough, cheap quality signal. An unknown
+    duration passes; an unknown play count fails a play threshold."""
+    d = track.get("duration")
+    if d is not None and d > max_s:
+        return f"{d / 60:.0f} min: a mix, not a track"
+    if d is not None and d < min_s:
+        return f"{d:.0f} s: too short"
+    if min_plays and (track.get("play_count") or 0) < min_plays:
+        return f"{track.get('play_count') or 0} plays (< {min_plays})"
     return None
 
 
@@ -181,11 +196,11 @@ class AudiusClient:
             raise
         return None
 
-    def search(self, query: str, genres: list[str]) -> Iterator[Track]:
+    def search(self, query: str, genres: list[str], sort: str = "relevant") -> Iterator[Track]:
         # has_downloads=true is the filter that works; only_downloadable did not, when tested.
         for page in range(MAX_SEARCH_PAGES):
             params: dict[str, Any] = {"query": query, "limit": SEARCH_PAGE, "offset": page * SEARCH_PAGE,
-                                      "has_downloads": "true"}
+                                      "has_downloads": "true", "sort_method": sort}
             if genres:
                 params["genre"] = genres
             batch = self._json("/tracks/search", params).get("data") or []
@@ -226,7 +241,7 @@ def glob_escape(s: str) -> str:
 
 def candidates(client: AudiusClient, args: argparse.Namespace, report: list[tuple[str, str, str]]) -> Iterator[Track]:
     if args.search:
-        yield from client.search(args.search, args.genre)
+        yield from client.search(args.search, args.genre, args.sort)
         return
     for ref in args.tracks:
         tid = client.resolve_track_id(ref) if is_url(ref) else ref
@@ -252,6 +267,10 @@ def main() -> None:
     ap.add_argument("--out", type=Path, default=HERE / "tracks")
     ap.add_argument("--overrides", type=Path, default=HERE / "overrides.json")
     ap.add_argument("--dry-run", action="store_true", help="list what would be downloaded; write nothing")
+    ap.add_argument("--sort", choices=["relevant", "popular", "recent"], default="relevant", help="search order (Audius sort_method)")
+    ap.add_argument("--min-plays", type=int, default=0, help="skip tracks with fewer plays")
+    ap.add_argument("--min-minutes", type=float, default=1.5, help="skip shorter tracks (skits, snippets)")
+    ap.add_argument("--max-minutes", type=float, default=10, help="skip longer tracks (DJ mixes)")
     args = ap.parse_args()
     if bool(args.tracks) == bool(args.search):
         ap.error("give track URLs/IDs or --search, not both (and not neither)")
@@ -271,13 +290,14 @@ def main() -> None:
             if fetched >= args.limit:
                 break
             label = f"{artist_name(track)} - {track.get('title', '?')}"
-            reason = skip_reason(track)
+            reason = skip_reason(track) or quality_reason(track, args.min_plays, args.min_minutes * 60, args.max_minutes * 60)
             if reason:
                 report.append(("skipped", label, reason))
                 continue
             base = base_name(track)
             if args.dry_run:
-                report.append(("would get", label, f"{track_url(track)}  [{track.get('license') or 'no license given'}]"))
+                report.append(("would get", label, f"{track_url(track)}  [{track.get('license') or 'no license given'}; "
+                                                   f"{track.get('play_count') or 0} plays, {(track.get('duration') or 0) / 60:.1f} min, {track.get('genre') or '?'}]"))
                 fetched += 1
                 continue
             path = existing_file(args.out, base)

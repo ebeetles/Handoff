@@ -1,0 +1,94 @@
+{
+  "schema_version": 3,
+  "id": "echo_out",
+  "name": "Echo out",
+  "description": "The old track builds an echo, cuts on bar 8 and rings out, and the new track drops in under the tail. Works across any tempo or key.",
+  "bars": 12,
+  "requires": {
+    "stems": "none",
+    "beatmatchable": false,
+    "max_camelot_distance": null
+  },
+  "events": [
+    {
+      "at_bar": 8,
+      "deck": "in",
+      "command": "play"
+    },
+    {
+      "at_bar": 12,
+      "deck": "out",
+      "command": "pause"
+    }
+  ],
+  "lanes": [
+    {
+      "deck": "in",
+      "control": "volume",
+      "points": [
+        [
+          0,
+          0.8
+        ]
+      ]
+    },
+    {
+      "deck": "out",
+      "control": "echo",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          6,
+          0
+        ],
+        [
+          7.5,
+          0.7
+        ],
+        [
+          8,
+          0.7
+        ]
+      ]
+    },
+    {
+      "deck": "out",
+      "control": "filter",
+      "points": [
+        [
+          0,
+          0.5
+        ],
+        [
+          6,
+          0.5
+        ],
+        [
+          8,
+          0.65
+        ]
+      ]
+    },
+    {
+      "deck": null,
+      "control": "xfader",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          8,
+          1
+        ]
+      ]
+    }
+  ]
+}

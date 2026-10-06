@@ -16,7 +16,7 @@ export function attachKeyboard(dispatch: (c: Command) => void, store: ControlSto
     "7": ["B", 1], "8": ["B", 2], "9": ["B", 4], "0": ["B", 8],
   };
   const onKey = (e: KeyboardEvent) => {
-    if (e.repeat || e.metaKey || e.ctrlKey || (e.target as HTMLElement)?.closest("input, textarea")) return;
+    if (e.repeat || e.metaKey || e.ctrlKey || (e.target as HTMLElement)?.closest("input, textarea, select")) return;
     const k = e.key.toLowerCase();
     const cmd: Command | null =
       k === "q" ? { type: "togglePlay", deck: "A" } :

@@ -1,0 +1,1426 @@
+{
+  "schema_version": 3,
+  "generated_at": "2026-10-05T00:00:00+00:00",
+  "pairs": [
+    {
+      "out_track": "demo-amber-room-a464754d",
+      "in_track": "demo-teal-signal-242dff7c",
+      "facts": {
+        "tempo": {
+          "out_bpm": 124.0,
+          "in_bpm": 128.0,
+          "both_steady": true,
+          "gap_pct": 3.2,
+          "sync": {
+            "multiplier": 1,
+            "rate_change_pct": -3.12
+          },
+          "tempo_ride": {
+            "multiplier": 1,
+            "out_rate_change_pct": 3.22,
+            "in_rate_change_pct": 0.0
+          }
+        },
+        "key": {
+          "out": "8B",
+          "in": "9B",
+          "distance": 1,
+          "compatible": true,
+          "when_locked": {
+            "semitones": -0.55,
+            "in_sounds_as": "9B",
+            "distance": 1,
+            "detune_cents": -55
+          }
+        },
+        "stems": {
+          "out": true,
+          "in": true
+        },
+        "exit_bars": [
+          0,
+          16,
+          32,
+          48
+        ],
+        "entry_bars": [
+          0,
+          16,
+          32,
+          48
+        ]
+      },
+      "composer": null,
+      "candidates": [
+        {
+          "id": "rules_4190404417ee5f97",
+          "source": "rules",
+          "idea": "Bass swap blend",
+          "rationale": "B comes in under A without its bass, then the basslines swap on bar 8.",
+          "plan": {
+            "out_start_bar": 32,
+            "moves": [
+              {
+                "move": "in_enter",
+                "at_bar": 0,
+                "from_bar": 0
+              },
+              {
+                "move": "crossfade",
+                "start_bar": 0,
+                "end_bar": 4,
+                "to": 0.5,
+                "shape": "ramp"
+              },
+              {
+                "move": "bass_swap",
+                "at_bar": 8
+              },
+              {
+                "move": "crossfade",
+                "start_bar": 12,
+                "end_bar": 16,
+                "to": 1,
+                "shape": "ramp"
+              },
+              {
+                "move": "out_stop",
+                "at_bar": 16
+              }
+            ]
+          },
+          "errors": [],
+          "recipe": {
+            "schema_version": 3,
+            "id": "rules_4190404417ee5f97",
+            "name": "Bass swap blend",
+            "description": "B comes in under A without its bass, then the basslines swap on bar 8.",
+            "bars": 16,
+            "requires": {
+              "stems": "both",
+              "beatmatchable": true,
+              "max_camelot_distance": null
+            },
+            "anchor": {
+              "out_track": "demo-amber-room-a464754d",
+              "in_track": "demo-teal-signal-242dff7c",
+              "out_start_bar": 32,
+              "in_from_bar": 0
+            },
+            "events": [
+              {
+                "at_bar": 0,
+                "deck": "in",
+                "command": "play"
+              },
+              {
+                "at_bar": 16,
+                "deck": "out",
+                "command": "pause"
+              }
+            ],
+            "lanes": [
+              {
+                "deck": null,
+                "control": "xfader",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    4.0,
+                    0.5
+                  ],
+                  [
+                    12.0,
+                    0.5
+                  ],
+                  [
+                    16.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "echo",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqHigh",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqLow",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqMid",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "filter",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.bass",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    8.0,
+                    0.0
+                  ],
+                  [
+                    8.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.drums",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.other",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.vocals",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "volume",
+                "points": [
+                  [
+                    0.0,
+                    0.8
+                  ]
+                ]
+              },
+              {
+                "deck": "out",
+                "control": "stem.bass",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    8.0,
+                    1.0
+                  ],
+                  [
+                    8.0,
+                    0.0
+                  ]
+                ]
+              }
+            ]
+          },
+          "critic": {
+            "valid": true,
+            "score": 83.1,
+            "breakdown": {
+              "key_clash": -9.66,
+              "calm_exit": 4.0,
+              "clean_blend": 0.75
+            },
+            "measures": {
+              "bass_clash_bars": 0.0,
+              "vocal_clash_bars": 0.0,
+              "key_clash_bars": 4.83,
+              "rhythm_clash_bars": 0.0,
+              "ride_tonal_bars": 0.0,
+              "dip_bars": 0.0,
+              "spike_bars": 0.0,
+              "overlap_bars": 14.38,
+              "clean_overlap_bars": 1.5,
+              "locked": true,
+              "vocals_known": true
+            },
+            "reasons": [
+              "The keys (8B, 9B (B sounds -0.5 semitones off its key at this tempo)) clash while both melodies are up.",
+              "A leaves from its break (low energy).",
+              "The two tracks blend cleanly for 1.5 bars."
+            ],
+            "worst": "key_clash"
+          }
+        },
+        {
+          "id": "rules_225802232d508a70",
+          "source": "rules",
+          "idea": "Filter handoff",
+          "rationale": "B opens up from a low-pass while A thins out through a rising high-pass.",
+          "plan": {
+            "out_start_bar": 32,
+            "moves": [
+              {
+                "move": "in_enter",
+                "at_bar": 0,
+                "from_bar": 0
+              },
+              {
+                "move": "filter_sweep",
+                "deck": "in",
+                "kind": "lowpass",
+                "direction": "close",
+                "start_bar": 0,
+                "end_bar": 0
+              },
+              {
+                "move": "filter_sweep",
+                "deck": "in",
+                "kind": "lowpass",
+                "direction": "open",
+                "start_bar": 0.25,
+                "end_bar": 8
+              },
+              {
+                "move": "crossfade",
+                "start_bar": 0,
+                "end_bar": 6,
+                "to": 0.5,
+                "shape": "ramp"
+              },
+              {
+                "move": "filter_sweep",
+                "deck": "out",
+                "kind": "highpass",
+                "direction": "close",
+                "start_bar": 8,
+                "end_bar": 16
+              },
+              {
+                "move": "crossfade",
+                "start_bar": 10,
+                "end_bar": 16,
+                "to": 1,
+                "shape": "ramp"
+              },
+              {
+                "move": "out_stop",
+                "at_bar": 16
+              }
+            ]
+          },
+          "errors": [],
+          "recipe": {
+            "schema_version": 3,
+            "id": "rules_225802232d508a70",
+            "name": "Filter handoff",
+            "description": "B opens up from a low-pass while A thins out through a rising high-pass.",
+            "bars": 16,
+            "requires": {
+              "stems": "in",
+              "beatmatchable": true,
+              "max_camelot_distance": null
+            },
+            "anchor": {
+              "out_track": "demo-amber-room-a464754d",
+              "in_track": "demo-teal-signal-242dff7c",
+              "out_start_bar": 32,
+              "in_from_bar": 0
+            },
+            "events": [
+              {
+                "at_bar": 0,
+                "deck": "in",
+                "command": "play"
+              },
+              {
+                "at_bar": 16,
+                "deck": "out",
+                "command": "pause"
+              }
+            ],
+            "lanes": [
+              {
+                "deck": null,
+                "control": "xfader",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    6.0,
+                    0.5
+                  ],
+                  [
+                    10.0,
+                    0.5
+                  ],
+                  [
+                    16.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "echo",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqHigh",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqLow",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqMid",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "filter",
+                "points": [
+                  [
+                    0.0,
+                    0.15
+                  ],
+                  [
+                    0.25,
+                    0.15
+                  ],
+                  [
+                    8.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.bass",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.drums",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.other",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.vocals",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "volume",
+                "points": [
+                  [
+                    0.0,
+                    0.8
+                  ]
+                ]
+              },
+              {
+                "deck": "out",
+                "control": "filter",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ],
+                  [
+                    8.0,
+                    0.5
+                  ],
+                  [
+                    16.0,
+                    0.82
+                  ]
+                ]
+              }
+            ]
+          },
+          "critic": {
+            "valid": true,
+            "score": 66.8,
+            "breakdown": {
+              "bass_clash": -19.5,
+              "key_clash": -7.5,
+              "calm_exit": 4.0,
+              "clean_blend": 1.81
+            },
+            "measures": {
+              "bass_clash_bars": 4.88,
+              "vocal_clash_bars": 0.0,
+              "key_clash_bars": 3.75,
+              "rhythm_clash_bars": 0.0,
+              "ride_tonal_bars": 0.0,
+              "dip_bars": 0.0,
+              "spike_bars": 0.0,
+              "overlap_bars": 13.62,
+              "clean_overlap_bars": 3.62,
+              "locked": true,
+              "vocals_known": true
+            },
+            "reasons": [
+              "Both basslines are up together for 4.875 bars.",
+              "The keys (8B, 9B (B sounds -0.5 semitones off its key at this tempo)) clash while both melodies are up.",
+              "A leaves from its break (low energy).",
+              "The two tracks blend cleanly for 3.625 bars."
+            ],
+            "worst": "bass_clash"
+          }
+        },
+        {
+          "id": "rules_b7788997aecd77f8",
+          "source": "rules",
+          "idea": "Loop roll drop",
+          "rationale": "A rolls faster and faster under a rising high-pass, then B drops on the phrase.",
+          "plan": {
+            "out_start_bar": 32,
+            "moves": [
+              {
+                "move": "filter_sweep",
+                "deck": "out",
+                "kind": "highpass",
+                "direction": "close",
+                "start_bar": 12,
+                "end_bar": 16
+              },
+              {
+                "move": "loop_roll",
+                "start_bar": 12,
+                "end_bar": 16
+              },
+              {
+                "move": "in_enter",
+                "at_bar": 16,
+                "from_bar": 0
+              },
+              {
+                "move": "crossfade",
+                "start_bar": 16,
+                "end_bar": 16,
+                "to": 1,
+                "shape": "cut"
+              },
+              {
+                "move": "out_stop",
+                "at_bar": 17
+              }
+            ]
+          },
+          "errors": [],
+          "recipe": {
+            "schema_version": 3,
+            "id": "rules_b7788997aecd77f8",
+            "name": "Loop roll drop",
+            "description": "A rolls faster and faster under a rising high-pass, then B drops on the phrase.",
+            "bars": 17,
+            "requires": {
+              "stems": "in",
+              "beatmatchable": false,
+              "max_camelot_distance": null
+            },
+            "anchor": {
+              "out_track": "demo-amber-room-a464754d",
+              "in_track": "demo-teal-signal-242dff7c",
+              "out_start_bar": 32,
+              "in_from_bar": 0
+            },
+            "events": [
+              {
+                "at_bar": 12.0,
+                "deck": "out",
+                "command": "loop",
+                "beats": 0.5
+              },
+              {
+                "at_bar": 14.0,
+                "deck": "out",
+                "command": "loop",
+                "beats": 0.25
+              },
+              {
+                "at_bar": 15.0,
+                "deck": "out",
+                "command": "loop",
+                "beats": 0.125
+              },
+              {
+                "at_bar": 16,
+                "deck": "out",
+                "command": "loop_off"
+              },
+              {
+                "at_bar": 16,
+                "deck": "in",
+                "command": "play"
+              },
+              {
+                "at_bar": 17,
+                "deck": "out",
+                "command": "pause"
+              }
+            ],
+            "lanes": [
+              {
+                "deck": null,
+                "control": "xfader",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    16.0,
+                    0.0
+                  ],
+                  [
+                    16.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "echo",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqHigh",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqLow",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqMid",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "filter",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.bass",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.drums",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.other",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.vocals",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "volume",
+                "points": [
+                  [
+                    0.0,
+                    0.8
+                  ]
+                ]
+              },
+              {
+                "deck": "out",
+                "control": "filter",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ],
+                  [
+                    12.0,
+                    0.5
+                  ],
+                  [
+                    16.0,
+                    0.82
+                  ]
+                ]
+              }
+            ]
+          },
+          "critic": {
+            "valid": true,
+            "score": 92.0,
+            "breakdown": {
+              "calm_exit": 4.0
+            },
+            "measures": {
+              "bass_clash_bars": 0.0,
+              "vocal_clash_bars": 0.0,
+              "key_clash_bars": 0.0,
+              "rhythm_clash_bars": 0.0,
+              "ride_tonal_bars": 0.0,
+              "dip_bars": 0.0,
+              "spike_bars": 0.0,
+              "overlap_bars": 0.0,
+              "clean_overlap_bars": 0.0,
+              "locked": false,
+              "vocals_known": true
+            },
+            "reasons": [
+              "A leaves from its break (low energy)."
+            ],
+            "worst": null
+          }
+        },
+        {
+          "id": "rules_8d4ef9f3a277733a",
+          "source": "rules",
+          "idea": "Drum bridge",
+          "rationale": "B's drums join A, A drops to drums on bar 8 as B's bass and melody come in, then B's vocals.",
+          "plan": {
+            "out_start_bar": 32,
+            "moves": [
+              {
+                "move": "in_enter",
+                "at_bar": 0,
+                "from_bar": 0
+              },
+              {
+                "move": "stem_drop",
+                "deck": "in",
+                "stems": [
+                  "bass",
+                  "vocals",
+                  "other"
+                ],
+                "action": "mute",
+                "at_bar": 0
+              },
+              {
+                "move": "crossfade",
+                "start_bar": 0,
+                "end_bar": 4,
+                "to": 0.5,
+                "shape": "ramp"
+              },
+              {
+                "move": "stem_drop",
+                "deck": "out",
+                "stems": [
+                  "vocals"
+                ],
+                "action": "mute",
+                "at_bar": 4
+              },
+              {
+                "move": "stem_drop",
+                "deck": "out",
+                "stems": [
+                  "bass",
+                  "other"
+                ],
+                "action": "mute",
+                "at_bar": 8
+              },
+              {
+                "move": "stem_drop",
+                "deck": "in",
+                "stems": [
+                  "bass",
+                  "other"
+                ],
+                "action": "unmute",
+                "at_bar": 8
+              },
+              {
+                "move": "stem_drop",
+                "deck": "in",
+                "stems": [
+                  "vocals"
+                ],
+                "action": "unmute",
+                "at_bar": 12
+              },
+              {
+                "move": "crossfade",
+                "start_bar": 12,
+                "end_bar": 16,
+                "to": 1,
+                "shape": "ramp"
+              },
+              {
+                "move": "out_stop",
+                "at_bar": 16
+              }
+            ]
+          },
+          "errors": [],
+          "recipe": {
+            "schema_version": 3,
+            "id": "rules_8d4ef9f3a277733a",
+            "name": "Drum bridge",
+            "description": "B's drums join A, A drops to drums on bar 8 as B's bass and melody come in, then B's vocals.",
+            "bars": 16,
+            "requires": {
+              "stems": "both",
+              "beatmatchable": true,
+              "max_camelot_distance": null
+            },
+            "anchor": {
+              "out_track": "demo-amber-room-a464754d",
+              "in_track": "demo-teal-signal-242dff7c",
+              "out_start_bar": 32,
+              "in_from_bar": 0
+            },
+            "events": [
+              {
+                "at_bar": 0,
+                "deck": "in",
+                "command": "play"
+              },
+              {
+                "at_bar": 16,
+                "deck": "out",
+                "command": "pause"
+              }
+            ],
+            "lanes": [
+              {
+                "deck": null,
+                "control": "xfader",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    4.0,
+                    0.5
+                  ],
+                  [
+                    12.0,
+                    0.5
+                  ],
+                  [
+                    16.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "echo",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqHigh",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqLow",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqMid",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "filter",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.bass",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    8.0,
+                    0.0
+                  ],
+                  [
+                    8.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.drums",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.other",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    8.0,
+                    0.0
+                  ],
+                  [
+                    8.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.vocals",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    12.0,
+                    0.0
+                  ],
+                  [
+                    12.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "volume",
+                "points": [
+                  [
+                    0.0,
+                    0.8
+                  ]
+                ]
+              },
+              {
+                "deck": "out",
+                "control": "stem.bass",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    8.0,
+                    1.0
+                  ],
+                  [
+                    8.0,
+                    0.0
+                  ]
+                ]
+              },
+              {
+                "deck": "out",
+                "control": "stem.other",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    8.0,
+                    1.0
+                  ],
+                  [
+                    8.0,
+                    0.0
+                  ]
+                ]
+              },
+              {
+                "deck": "out",
+                "control": "stem.vocals",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    4.0,
+                    1.0
+                  ],
+                  [
+                    4.0,
+                    0.0
+                  ]
+                ]
+              }
+            ]
+          },
+          "critic": {
+            "valid": true,
+            "score": 89.6,
+            "breakdown": {
+              "dip": -9.0,
+              "calm_exit": 4.0,
+              "clean_blend": 6.62
+            },
+            "measures": {
+              "bass_clash_bars": 0.0,
+              "vocal_clash_bars": 0.0,
+              "key_clash_bars": 0.0,
+              "rhythm_clash_bars": 0.0,
+              "ride_tonal_bars": 0.0,
+              "dip_bars": 4.0,
+              "spike_bars": 0.0,
+              "overlap_bars": 13.25,
+              "clean_overlap_bars": 13.25,
+              "locked": true,
+              "vocals_known": true
+            },
+            "reasons": [
+              "The level drops away for 4 bars.",
+              "A leaves from its break (low energy).",
+              "The two tracks blend cleanly for 13.25 bars."
+            ],
+            "worst": "dip"
+          }
+        },
+        {
+          "id": "rules_26c459845e132c1a",
+          "source": "rules",
+          "idea": "Echo out",
+          "rationale": "A builds an echo and cuts on bar 8; B drops in under the tail. Works across any tempo or key.",
+          "plan": {
+            "out_start_bar": 32,
+            "moves": [
+              {
+                "move": "echo_throw",
+                "at_bar": 8,
+                "cut": true
+              },
+              {
+                "move": "in_enter",
+                "at_bar": 8,
+                "from_bar": 0
+              },
+              {
+                "move": "crossfade",
+                "start_bar": 8,
+                "end_bar": 8,
+                "to": 1,
+                "shape": "cut"
+              },
+              {
+                "move": "out_stop",
+                "at_bar": 12
+              }
+            ]
+          },
+          "errors": [],
+          "recipe": {
+            "schema_version": 3,
+            "id": "rules_26c459845e132c1a",
+            "name": "Echo out",
+            "description": "A builds an echo and cuts on bar 8; B drops in under the tail. Works across any tempo or key.",
+            "bars": 12,
+            "requires": {
+              "stems": "in",
+              "beatmatchable": false,
+              "max_camelot_distance": null
+            },
+            "anchor": {
+              "out_track": "demo-amber-room-a464754d",
+              "in_track": "demo-teal-signal-242dff7c",
+              "out_start_bar": 32,
+              "in_from_bar": 0
+            },
+            "events": [
+              {
+                "at_bar": 8,
+                "deck": "in",
+                "command": "play"
+              },
+              {
+                "at_bar": 12,
+                "deck": "out",
+                "command": "pause"
+              }
+            ],
+            "lanes": [
+              {
+                "deck": null,
+                "control": "xfader",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    8.0,
+                    0.0
+                  ],
+                  [
+                    8.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "echo",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqHigh",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqLow",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqMid",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "filter",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.bass",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.drums",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.other",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.vocals",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "volume",
+                "points": [
+                  [
+                    0.0,
+                    0.8
+                  ]
+                ]
+              },
+              {
+                "deck": "out",
+                "control": "echo",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    7.0,
+                    0.0
+                  ],
+                  [
+                    7.75,
+                    0.7
+                  ],
+                  [
+                    9.0,
+                    0.7
+                  ],
+                  [
+                    9.0,
+                    0.0
+                  ]
+                ]
+              },
+              {
+                "deck": "out",
+                "control": "volume",
+                "points": [
+                  [
+                    0.0,
+                    0.8
+                  ],
+                  [
+                    8.0,
+                    0.8
+                  ],
+                  [
+                    8.0,
+                    0.0
+                  ]
+                ]
+              }
+            ]
+          },
+          "critic": {
+            "valid": true,
+            "score": 92.0,
+            "breakdown": {
+              "calm_exit": 4.0
+            },
+            "measures": {
+              "bass_clash_bars": 0.0,
+              "vocal_clash_bars": 0.0,
+              "key_clash_bars": 0.0,
+              "rhythm_clash_bars": 0.0,
+              "ride_tonal_bars": 0.0,
+              "dip_bars": 0.0,
+              "spike_bars": 0.0,
+              "overlap_bars": 0.0,
+              "clean_overlap_bars": 0.0,
+              "locked": false,
+              "vocals_known": true
+            },
+            "reasons": [
+              "A leaves from its break (low energy)."
+            ],
+            "worst": null
+          }
+        }
+      ],
+      "best": 2
+    }
+  ]
+}

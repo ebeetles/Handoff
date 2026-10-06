@@ -7,7 +7,7 @@ import type { StemName } from "../contracts/track";
 export type DeckId = "A" | "B";
 export const DECKS: readonly DeckId[] = ["A", "B"];
 
-export type DeckControl = "eqHigh" | "eqMid" | "eqLow" | "filter" | "volume" | "tempo" | `stem.${StemName}`;
+export type DeckControl = "eqHigh" | "eqMid" | "eqLow" | "filter" | "volume" | "tempo" | "echo" | `stem.${StemName}`;
 export type GlobalControl = "xfader" | "master" | "quantize";
 export type ControlId = `${DeckId}.${DeckControl}` | GlobalControl;
 
@@ -23,6 +23,7 @@ const deckDefs: Record<DeckControl, ControlDef> = {
   filter: { default: 0.5, kind: "continuous", label: "Filter" },
   volume: { default: 0.8, kind: "continuous", label: "Volume" },
   tempo: { default: 0.5, kind: "continuous", label: "Tempo" },
+  echo: { default: 0, kind: "continuous", label: "Echo" },   // send to a 3/4-beat delay; tails ring out after a cut
   "stem.drums": { default: 1, kind: "toggle", label: "Drums" },
   "stem.bass": { default: 1, kind: "toggle", label: "Bass" },
   "stem.vocals": { default: 1, kind: "toggle", label: "Vocals" },
@@ -68,6 +69,10 @@ export class ControlStore {
 
   reset(id: ControlId, source: ControlSource): void {
     this.set(id, CONTROL_DEFS[id].default, source);
+  }
+
+  isHeld(id: ControlId): boolean {
+    return this.held.has(id);
   }
 
   setHeld(id: ControlId, held: boolean): void {

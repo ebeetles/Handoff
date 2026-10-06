@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "handoff/recipe/v3",
+  "title": "Recipe",
+  "description": "A transition, authored by hand: lanes of breakpoints and timed events, in bars from the transition start (a phrase boundary on the outgoing deck). Hand-authored presets (contracts/recipes/) or compiled per pair by the Chunk 7 composer (then anchored). Read by web/src/coDJ (automation player) and the planner. Bump schema_version on any breaking change and update both readers.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "name",
+    "description",
+    "bars",
+    "requires",
+    "events",
+    "lanes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 3
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string",
+      "description": "One plain sentence: what the listener hears. Shown in the UI; also a fact the LLM may cite (Chunk 10)."
+    },
+    "bars": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Length. The recipe ends (and cleans up) when the outgoing deck reaches this bar."
+    },
+    "requires": {
+      "type": "object",
+      "required": [
+        "stems",
+        "beatmatchable",
+        "max_camelot_distance"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "stems": {
+          "enum": [
+            "none",
+            "out",
+            "in",
+            "both"
+          ],
+          "description": "Which decks need separated stems (every stem lane's deck must be covered)."
+        },
+        "beatmatchable": {
+          "type": "boolean",
+          "description": "Both decks need a steady grid (they overlap in time)."
+        },
+        "max_camelot_distance": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Max key distance (steps round the Camelot wheel, +1 for a major/minor change). null = any key."
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "at_bar",
+          "deck",
+          "command"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "at_bar": {
+            "type": "number",
+            "minimum": 0
+          },
+          "deck": {
+            "enum": [
+              "in",
+              "out"
+            ]
+          },
+          "command": {
+            "enum": [
+              "play",
+              "pause",
+              "loop",
+              "loop_off",
+              "brake"
+            ],
+            "description": "play = start exactly on this bar (from the deck's nearest bar line); loop needs beats (loop size); brake (outgoing deck only) slows the deck to a stop over `beats` beats from this bar, like a turntable."
+          },
+          "beats": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        }
+      }
+    },
+    "lanes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "deck",
+          "control",
+          "points"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "deck": {
+            "enum": [
+              "in",
+              "out",
+              null
+            ],
+            "description": "null only for xfader."
+          },
+          "control": {
+            "enum": [
+              "eqLow",
+              "eqMid",
+              "eqHigh",
+              "filter",
+              "volume",
+              "echo",
+              "stem.drums",
+              "stem.bass",
+              "stem.vocals",
+              "stem.other",
+              "xfader",
+              "tempo"
+            ],
+            "description": "tempo (outgoing deck only, ramps only, no steps): the tempo fader, 0..1 = -8%..+8%. Before its first change the player keeps the deck's current tempo, so a ride starts from wherever the deck is."
+          },
+          "points": {
+            "type": "array",
+            "minItems": 1,
+            "description": "[bar, value 0..1], bars non-decreasing. Two points at the same bar = a step (lands exactly on the bar); otherwise linear. Held before the first and after the last point. xfader values run out (0) -> in (1).",
+            "items": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              ],
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        }
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "required": [
+        "out_start_bar",
+        "in_from_bar"
+      ],
+      "additionalProperties": false,
+      "description": "Composed recipes are written for one pair: the transition starts when the outgoing deck reaches out_start_bar (a phrase start), and the incoming deck plays from in_from_bar. Presets have no anchor: they start on the outgoing deck's next phrase, and the incoming deck plays from where it is.",
+      "properties": {
+        "out_track": {
+          "type": "string",
+          "description": "Track id the anchor refers to (outgoing)."
+        },
+        "in_track": {
+          "type": "string",
+          "description": "Track id the anchor refers to (incoming)."
+        },
+        "out_start_bar": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "in_from_bar": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

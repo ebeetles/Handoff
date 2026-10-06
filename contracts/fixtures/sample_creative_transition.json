@@ -1,0 +1,519 @@
+{
+  "schema_version": 3,
+  "generated_at": "2026-10-05T00:00:00+00:00",
+  "pairs": [
+    {
+      "out_track": "demo-amber-room-a464754d",
+      "in_track": "demo-teal-signal-242dff7c",
+      "facts": {
+        "tempo": {
+          "out_bpm": 124.0,
+          "in_bpm": 128.0,
+          "both_steady": true,
+          "gap_pct": 3.2,
+          "sync": {
+            "multiplier": 1,
+            "rate_change_pct": -3.12
+          },
+          "tempo_ride": {
+            "multiplier": 1,
+            "out_rate_change_pct": 3.22,
+            "in_rate_change_pct": 0.0
+          }
+        },
+        "key": {
+          "out": "8B",
+          "in": "9B",
+          "distance": 1,
+          "compatible": true,
+          "when_locked": {
+            "semitones": -0.55,
+            "in_sounds_as": "9B",
+            "distance": 1,
+            "detune_cents": -55
+          }
+        },
+        "stems": {
+          "out": true,
+          "in": true
+        },
+        "exit_bars": [
+          0,
+          16,
+          32,
+          48
+        ],
+        "entry_bars": [
+          0,
+          16,
+          32,
+          48
+        ]
+      },
+      "composer": null,
+      "best": 0,
+      "candidates": [
+        {
+          "id": "fixture_midtrack_relay",
+          "source": "rules",
+          "idea": "Mid-track chopped relay",
+          "rationale": "A rhythmic percussion handoff at A's early phrase into B's middle phrase.",
+          "plan": {
+            "out_start_bar": 16,
+            "moves": [
+              {
+                "move": "in_enter",
+                "at_bar": 0,
+                "from_bar": 32
+              },
+              {
+                "move": "crossfade",
+                "start_bar": 0,
+                "end_bar": 2,
+                "to": 0.5,
+                "shape": "ramp"
+              },
+              {
+                "move": "eq",
+                "deck": "out",
+                "band": "mid",
+                "start_bar": 2,
+                "end_bar": 4,
+                "to": "dip"
+              },
+              {
+                "move": "bass_swap",
+                "at_bar": 4
+              },
+              {
+                "move": "rhythmic_gate",
+                "deck": "out",
+                "start_bar": 4,
+                "end_bar": 6,
+                "period_beats": 1,
+                "depth": 0.9
+              },
+              {
+                "move": "filter_sweep",
+                "deck": "out",
+                "start_bar": 6,
+                "end_bar": 8,
+                "kind": "highpass",
+                "direction": "close"
+              },
+              {
+                "move": "volume",
+                "deck": "out",
+                "start_bar": 6.25,
+                "end_bar": 8,
+                "to": 0
+              },
+              {
+                "move": "crossfade",
+                "start_bar": 6,
+                "end_bar": 8,
+                "to": 1,
+                "shape": "ramp"
+              },
+              {
+                "move": "out_stop",
+                "at_bar": 8
+              }
+            ]
+          },
+          "errors": [],
+          "recipe": {
+            "schema_version": 3,
+            "id": "fixture_midtrack_relay",
+            "name": "Mid-track chopped relay",
+            "description": "A rhythmic percussion handoff at A's early phrase into B's middle phrase.",
+            "bars": 8,
+            "requires": {
+              "stems": "both",
+              "beatmatchable": true,
+              "max_camelot_distance": null
+            },
+            "anchor": {
+              "out_track": "demo-amber-room-a464754d",
+              "in_track": "demo-teal-signal-242dff7c",
+              "out_start_bar": 16,
+              "in_from_bar": 32
+            },
+            "events": [
+              {
+                "at_bar": 0,
+                "deck": "in",
+                "command": "play"
+              },
+              {
+                "at_bar": 8,
+                "deck": "out",
+                "command": "pause"
+              }
+            ],
+            "lanes": [
+              {
+                "deck": null,
+                "control": "xfader",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    2.0,
+                    0.5
+                  ],
+                  [
+                    6.0,
+                    0.5
+                  ],
+                  [
+                    8.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "echo",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqHigh",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqLow",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "eqMid",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "filter",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.bass",
+                "points": [
+                  [
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    4.0,
+                    0.0
+                  ],
+                  [
+                    4.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.drums",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.other",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "stem.vocals",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "deck": "in",
+                "control": "volume",
+                "points": [
+                  [
+                    0.0,
+                    0.8
+                  ]
+                ]
+              },
+              {
+                "deck": "out",
+                "control": "eqMid",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ],
+                  [
+                    2.0,
+                    0.5
+                  ],
+                  [
+                    4.0,
+                    0.3
+                  ]
+                ]
+              },
+              {
+                "deck": "out",
+                "control": "filter",
+                "points": [
+                  [
+                    0.0,
+                    0.5
+                  ],
+                  [
+                    6.0,
+                    0.5
+                  ],
+                  [
+                    8.0,
+                    0.82
+                  ]
+                ]
+              },
+              {
+                "deck": "out",
+                "control": "stem.bass",
+                "points": [
+                  [
+                    0.0,
+                    1.0
+                  ],
+                  [
+                    4.0,
+                    1.0
+                  ],
+                  [
+                    4.0,
+                    0.0
+                  ]
+                ]
+              },
+              {
+                "deck": "out",
+                "control": "volume",
+                "points": [
+                  [
+                    0.0,
+                    0.8
+                  ],
+                  [
+                    4.0,
+                    0.8
+                  ],
+                  [
+                    4.125,
+                    0.8
+                  ],
+                  [
+                    4.125,
+                    0.08
+                  ],
+                  [
+                    4.25,
+                    0.08
+                  ],
+                  [
+                    4.25,
+                    0.8
+                  ],
+                  [
+                    4.375,
+                    0.8
+                  ],
+                  [
+                    4.375,
+                    0.08
+                  ],
+                  [
+                    4.5,
+                    0.08
+                  ],
+                  [
+                    4.5,
+                    0.8
+                  ],
+                  [
+                    4.625,
+                    0.8
+                  ],
+                  [
+                    4.625,
+                    0.08
+                  ],
+                  [
+                    4.75,
+                    0.08
+                  ],
+                  [
+                    4.75,
+                    0.8
+                  ],
+                  [
+                    4.875,
+                    0.8
+                  ],
+                  [
+                    4.875,
+                    0.08
+                  ],
+                  [
+                    5.0,
+                    0.08
+                  ],
+                  [
+                    5.0,
+                    0.8
+                  ],
+                  [
+                    5.125,
+                    0.8
+                  ],
+                  [
+                    5.125,
+                    0.08
+                  ],
+                  [
+                    5.25,
+                    0.08
+                  ],
+                  [
+                    5.25,
+                    0.8
+                  ],
+                  [
+                    5.375,
+                    0.8
+                  ],
+                  [
+                    5.375,
+                    0.08
+                  ],
+                  [
+                    5.5,
+                    0.08
+                  ],
+                  [
+                    5.5,
+                    0.8
+                  ],
+                  [
+                    5.625,
+                    0.8
+                  ],
+                  [
+                    5.625,
+                    0.08
+                  ],
+                  [
+                    5.75,
+                    0.08
+                  ],
+                  [
+                    5.75,
+                    0.8
+                  ],
+                  [
+                    5.875,
+                    0.8
+                  ],
+                  [
+                    5.875,
+                    0.08
+                  ],
+                  [
+                    6.0,
+                    0.08
+                  ],
+                  [
+                    6.0,
+                    0.8
+                  ],
+                  [
+                    6.25,
+                    0.8
+                  ],
+                  [
+                    8.0,
+                    0.0
+                  ]
+                ]
+              }
+            ]
+          },
+          "critic": {
+            "valid": true,
+            "score": 84.6,
+            "breakdown": {
+              "key_clash": -3.38
+            },
+            "measures": {
+              "bass_clash_bars": 0.0,
+              "vocal_clash_bars": 0.0,
+              "key_clash_bars": 1.69,
+              "rhythm_clash_bars": 0.0,
+              "ride_tonal_bars": 0.0,
+              "dip_bars": 0.0,
+              "spike_bars": 0.0,
+              "overlap_bars": 5.38,
+              "clean_overlap_bars": 0.88,
+              "locked": true,
+              "vocals_known": true
+            },
+            "reasons": [
+              "The keys (8B, 9B (B sounds -0.5 semitones off its key at this tempo)) clash while both melodies are up."
+            ],
+            "worst": "key_clash"
+          }
+        }
+      ]
+    }
+  ]
+}

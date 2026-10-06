@@ -247,3 +247,28 @@ button { font: inherit; color: inherit; }
 .hand-pinch { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 6px; margin-top: 6px; color: var(--ink); }
 .hand-pinch small { color: var(--dim); font-size: 12px; }
 .hand-pinch input { width: 100%; accent-color: var(--ink); }
+
+/* ---------- temporary transition picker (Chunk 6) */
+.topbar-center { display: grid; justify-items: center; gap: 2px; min-width: 0; }
+.transition { display: grid; justify-items: center; gap: 4px; }
+.transition-row { display: flex; gap: 8px; align-items: center; }
+.transition select {
+  background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 999px;
+  padding: 7px 12px; font-family: var(--font-hw); font-size: 15px; font-weight: 600;
+}
+.transition-status { font-size: 13px; color: var(--dim); max-width: 60ch; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.transition-status.running, .transition-status.armed { color: var(--ink); }
+.transition-status.error { color: var(--hot); }
+.text-button:disabled { opacity: 0.45; cursor: default; }
+.composer-panel { position: fixed; inset: 0; margin: auto; width: min(540px, calc(100vw - 40px)); max-height: calc(100vh - 40px); overflow: auto;
+  padding: 26px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 18px; }
+.composer-panel::backdrop { background: #000a; }
+.composer-panel form, .composer-panel label { display: grid; gap: 12px; }
+.composer-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.composer-heading h2 { margin: 0; }
+.composer-panel select, .composer-panel textarea { width: 100%; box-sizing: border-box; background: var(--panel); color: var(--ink);
+  padding: 12px; border: 1px solid var(--rule); border-radius: 8px; font: inherit; }
+.composer-hint { color: var(--dim); font-size: 14px; margin: 0; }
+.composer-message { white-space: normal; font-size: 14px; }
+.transition-details { position: relative; font-size: 12px; max-width: 60ch; text-align: center; }
+.transition-details[open] { position: absolute; top: 90px; background: var(--panel); border: 1px solid var(--rule); padding: 12px; z-index: 20; }

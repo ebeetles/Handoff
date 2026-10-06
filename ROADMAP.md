@@ -15,9 +15,9 @@ OFFLINE (Python, run once per library)
         analysis.json   ◄── contract: contracts/track_analysis.schema.json
         waveform.json
         audio/mix.flac, audio/stem_*.flac
-        │  pipeline/plan_transitions.py   (Chunk 7: legality in code, scoring by Jev)
+        │  pipeline/plan_transitions.py   (Chunk 7: Claude composes moves -> compiler -> critic)
         ▼
-  library/transitions.json  ◄── contract: TransitionPlan (Chunk 7)
+  library/transitions.json  ◄── contract: Transitions (Chunk 7)
 
 BROWSER (React + TypeScript + Web Audio)
   mouse / keys / touch ─┐
@@ -52,13 +52,13 @@ The seams between those boxes are typed contracts. That's what lets separate age
 
 | # | Contract | Lives in | Written by → read by |
 |---|---|---|---|
-| C1 | TrackAnalysis v2 | `contracts/track_analysis.schema.json`, mirrored in `web/src/contracts/track.ts`, fixture in `contracts/fixtures/` | pipeline → web, planner |
+| C1 | TrackAnalysis v3 | `contracts/track_analysis.schema.json`, mirrored in `web/src/contracts/track.ts`, fixture in `contracts/fixtures/` | pipeline → web, planner |
 | C2 | Control ids + 0..1 semantics | `web/src/control/controls.ts` | inputs, automation → engine, UI |
-| C3 | Command union | `web/src/control/commands.ts` | inputs, co-DJ → engine |
+| C3 | Command union (add-only: `playAt`, `pause`, `loopOff`, `setControlAt`, `brakeAt`) | `web/src/control/commands.ts` | inputs, co-DJ → engine |
 | C4 | PointerSample | `web/src/input/gesture.ts` | input adapters (mouse, hands) → GestureController |
-| C5 | Recipe JSON (Chunk 6) | `contracts/recipe.schema.json` (to create) | authored by hand → automation player, planner |
-| C6 | TransitionPlan (Chunk 7) | `contracts/transitions.schema.json` (to create) | planner → backend, co-DJ |
-| C7 | HTTP API (Chunk 8) | `backend/` OpenAPI (auto from FastAPI) | backend → web |
+| C5 | Recipe JSON v3 (Chunk 6; v3 adds the outgoing `tempo` lane and `brake`) | `contracts/recipe.schema.json`, recipes in `contracts/recipes/`, mirrored in `web/src/contracts/recipe.ts` | authored by hand → automation player, planner |
+| C6 | Transitions v3 (Chunk 7) | `contracts/transitions.schema.json`, mirrored in `web/src/contracts/transitions.ts` | planner, composer API → web, co-DJ |
+| C7 | HTTP API (Chunk 8) | `backend/` OpenAPI (auto from FastAPI); `POST /api/composer/compose` request: `contracts/composer_request.schema.json` v1, mirrored in `web/src/contracts/composer.ts` (response: C6) | backend → web |
 
 To change a contract: bump its version, update writer and reader in the same change, regenerate fixtures, and run every test suite.
 
@@ -72,9 +72,9 @@ To change a contract: bump its version, update writer and reader in the same cha
 | 3 Control layer | Done |
 | 4 Board UI | v0.1 done |
 | 5 Hand input | v0.1 built and tested on synthetic hands; real-camera definition-of-done checks pending |
-| 6 Transition recipes + automation | Not started |
-| 7 Candidates + offline Jev scoring | Not started |
-| 8 Backend | Not started |
+| 6 Transition recipes + automation | v0.1 done: 5 recipes, automation player, echo; definition of done met in the browser test (by ear: pending) |
+| 7 Composed transitions (AI composer + critic) | Done: offline planner + live composer, verified live; Jev re-ranking not started |
+| 8 Backend | Started: local composer endpoint only (`backend/app.py`) |
 | 9 Live co-DJ + guided mode | Not started |
 | 10 LLM voice | Not started |
 | 11 Evaluation, writeup, deploy | Not started |
@@ -117,11 +117,13 @@ Stems come from Demucs (`--stems`) or from `<name>.stems/` folders. Per-file fix
 4. Weighting features before z-scoring undid the weights, so a breakdown was missed.
 5. (Real tracks.) A line fit through tracked beats breaks when the tracker slips half a beat: every later beat gets the wrong index (Frog Prince: residual 0.25, slope biased to 123.965 BPM). Full-band onsets also put the phase on loud offbeat hats; Zute's old grid had the right tempo but was half a beat off. Fixed by the direct kick-weighted grid search.
 6. `onset_strength(S=...)` without `n_fft` centers as if n_fft were 2048, which made a hop-64 band envelope 35 ms late. Always pass `n_fft` with `S=`.
+7. (Real tracks, 2026-10-04.) A kick whose low end swells peaks in the kick band up to ~50 ms after its attack. The kick-weighted drift check flipped between attack and swell by section, so 9 of 11 new tracks read 23–104 ms of "drift"; on one (TEKTULA) the grid itself sat 13.6 ms late. Fixed: the kick band picks *which* position is the beat, then a broadband search within ±⅛ beat (`refine_phase`) picks *where*, and drift is measured the same way. Guarded by `test_soft_kick_grid_sits_on_the_attack`.
+8. Beats were stored rounded to 0.1 ms, which made a regular grid's local tempo wobble ±0.02 BPM. Sync takes its rate from the local interval, so synced decks drifted ~0.2 ms/s (smoke-test phase checks failed at ~2.8 ms after re-analysis). Beats are now stored to 1 µs. Guarded by `test_regular_grid_is_stored_evenly_spaced`; post-sync drift went from 0.33 to 0.02 ms over 8 s.
 
 **1b: next upgrades (do with real tracks, before Chunk 7):**
-- [ ] Run on 10–20 real tracks across the genres you'll actually mix. Calibrate `BEATMATCHABLE_MAX_DRIFT_MS` / `DRIFT_MIN_SALIENCE` and the section novelty threshold, and record the values and reasons in the decision log below.
+- [ ] Run on 10–20 real tracks across the genres you'll actually mix. *(2026-10-04: 14 real tracks from Audius: house, tech house, techno, progressive house, electro, trance, drum & bass, dubstep, tropical house. 11 of 14 beatmatchable after fixes 7–8; not yet checked by ear. 2026-10-05: +14 for cross-genre testing: hip-hop, drum & bass, dubstep, trap, deep house, disco, funk, breakbeat, downtempo, ambient; 9 of 14 beatmatchable. The drifting ones are a swung hip-hop beat, two funk tracks, a downtempo instrumental and an ambient piece; check by ear whether the grid or the music drifts. The drum & bass track reads 90 BPM, i.e. half time. After listening, the user removed 3 as poor music (the ambient piece, that drum & bass track, the hip-hop beat) and asked for vocal tracks. +8 well-played vocal tracks (2.4k–26k plays): vocal house ×3, house, dance pop, drum & bass, future bass, melodic bass; vocals measured in 41–87% of bars. Library: 35 tracks.)* Calibrate `BEATMATCHABLE_MAX_DRIFT_MS` / `DRIFT_MIN_SALIENCE` and the section novelty threshold, and record the values and reasons in the decision log below.
 - [ ] Downbeat accuracy on real music is the weakest point. Spot-check every track in the board: the phrase lines on the waveform should land on obvious changes. Fix with `downbeat_shift`, and consider a neural downbeat tracker (e.g. Beat This!) if more than ~20% need fixing.
-- [ ] Run Demucs on the real tracks (overnight or on Colab) and check that stem lengths match the mix.
+- [x] Run Demucs on the real tracks (overnight or on Colab) and check that stem lengths match the mix. *(2026-10-05: all 14 real tracks, about 25 s each including analysis on an M3 Max. Lengths match, and the stems rebuild the mix (DC removed) to −26 to −41 dB. Both decks on stems take about 1 GB for the two longest tracks; they load in about 1 s each.)*
 - [ ] Optional: CLAP vibe tags per phrase, as strings in a new `tags` field (schema v3).
 
 **Pitfalls.** Always analyze the exact file that is served, never the original upload. Never serve lossy audio without measuring its decode offset.
@@ -308,23 +310,132 @@ Two points at the same bar mean a step; otherwise values interpolate linearly. "
 - Automation steps land within 5 ms of their bar position (assert in the smoke test).
 - Grabbing a lane mid-recipe stops automation for that lane.
 
-## Chunk 7: Candidates and offline Jev scoring
+**v0.1 (2026-10-05).**
+- **Contract C5:** `contracts/recipe.schema.json` + `contracts/recipes/*.json`, validated on both sides (pytest `test_recipes.py`, vitest via `assertRecipe`). Lanes are `[bar, value]`; a repeated bar is a step; crossfader values run out→in, so recipes work in both directions.
+- **Recipes:** bass swap (EQ, no stems needed), filter handoff, echo out (any key or tempo), loop roll (½→¼→⅛ rolls into a phrase drop), drum bridge (stems).
+- **Engine (C2/C3 additions, add-only):**
+  - control `${deck}.echo` (send to a ¾-beat delay with feedback, fed after the crossfader and returned to the master, so tails ring out after a cut);
+  - commands `playAt`, `pause`, `loopOff`, and `setControlAt` (the planned `scheduleControl`, as a Command so automation still never calls the engine);
+  - read-only `barAt` / `barToCtx` / `nextPhraseBar`, which follow a roll's slip clock.
+- **`coDJ/automation.ts`:** a 25 ms timer schedules 100 ms ahead.
+  - Steps and `playAt` go on the audio clock; ramps go through the store; pause/loop events fire on the first tick at or after their bar, since the engine snaps loops.
+  - Lanes on the audible side glide in over the first bar.
+  - A human write or hold takes a lane until the end.
+  - The outgoing deck's lanes reset to neutral afterwards.
+  - A recipe refuses with plain reasons (not playing, stems, drifting tempo, tempo gap, key clash).
+- **Temporary UI:** a recipe picker, "Try transition" and a status line in the top bar.
+- **Verified:**
+  - 11 vitest checks on the player (fake clock): exact steps, glide, both directions, takeover by write and by hold, loop timing, refusals, outgoing deck stopping.
+  - `e2e/recipes.py` (~5 min, real Chromium) plays every recipe on the demo tracks (one B→A, one with a mid-recipe grab):
+    - every step lands on its bar (worst 0.00 ms on the deck clock; the engine applied each);
+    - bars line up during overlaps (worst 0.05 ms);
+    - the end state matches each recipe file;
+    - the grabbed lane stays with the human;
+    - no page errors.
+  - Not yet judged by ear.
 
-**Goal.** For every ordered pair of tracks, a ranked list of good transitions, decided offline where it's cheap and deterministic.
+## Chunk 7: Composed transitions (reworked 2026-10-05)
 
-**Builds.** `pipeline/plan_transitions.py` → `library/transitions.json` (contract C6).
+**Goal.** The AI composes a new transition for each pair from building blocks, instead of picking a preset. It is given a vocabulary of moves plus the musical facts of both tracks, and writes several candidate plans ("drop A to drums on its breakdown, bring in B's vocal over it, echo-throw A's last phrase"). A critic scores them and the best one plays on the Chunk 6 player. Presets stay as the evaluation baseline. *Why the rework:* picking from five fixed recipes needs no AI.
 
-1. **Legality, in code.** Choose a BPM ratio m in {1, ½, 2} within ±8% (port `chooseSync` and test both ports against `contracts/fixtures/sync_cases.json`). Then apply Camelot distance, beatmatchable flags, and stem availability. The output is the legal (recipe, exit phrase, entry phrase) triples, each with machine-readable reasons.
-2. **Candidate points.** Exit phrases are the last 3 phrases of A plus any phrase that starts a low-energy section. Entry phrases are the first 2 phrases of B plus the phrase before B's first high-energy section.
-3. **State for Jev: compact and discretized, never raw arrays.** Per phrase: section label, energy trend (e.g. "high→falling"), bass heaviness, vocals present, Camelot key, tags. Precomputed facts: key distance, BPM difference in %, ratio m.
-4. **Jev questions per pair.** A `choice` over candidates (at most 255; chunk if more), a `score` for smoothness (5 levels), and a `noul` for energy clash. Keep the full probability distributions.
-5. **Decision client.** `DecisionClient(base_url, api_key, model)` posting System One requests. Cache on disk by hash of the request body, so reruns are free and reproducible, and record latency. Before writing it, read TypeSafe's API docs for the endpoint, auth, limits, and pricing. Don't guess. Kev's README shows the request and response shape.
-6. **Baselines, stored alongside for evaluation.** A rules-only ranker (closest BPM, then key, then last phrase into first phrase) and a random legal pick.
+**Pipeline** (`pipeline/plan_transitions.py` → `web/public/library/transitions.json`, contract C6), per ordered pair A → B:
+
+1. **Facts** (`compose/facts.py`). Each track is summarised per phrase, never as raw arrays:
+   - section label, energy level and trend, bass weight;
+   - vocals (from the vocal stem when there is one, else unknown);
+   - key, tempo, bars left.
+
+   Pair facts: tempo ratio (`chooseSync` port), key distance, which decks have stems.
+2. **Composer** (`compose/composer.py`): Claude, with structured outputs (strict JSON schema, a union of typed moves). It writes N different candidates. Each is an anchor (A's exit phrase bar, B's entry bar), moves in bars from the transition start, and a one-line rationale citing the facts.
+   - On-disk cache keyed by the request hash: reruns are free and reproducible.
+   - The API key comes from the environment (offline tooling only; never in the repo or the frontend).
+   - Server-side refusal fallback is on.
+   - A **rules composer** (templates over the same vocabulary) is the baseline and lets the pipeline run without a key.
+3. **Moves vocabulary** (`compose/moves.py`):
+   - `in_enter`: B starts at transition bar t, from B's bar m.
+   - `crossfade`: staged to a level, smooth or cut.
+   - `bass_swap`: on stems if both decks have them, else EQ.
+   - `eq`: kill, dip, flat or boost a band, stepped or ramped. This is the "EQ carve".
+   - `filter_sweep`: low-pass or high-pass, opening or closing.
+   - `echo_throw`: echo build, optional cut, tail rings.
+   - `stem_drop`: mute or unmute named stems; only on decks with stems.
+   - `loop_roll`: ½→¼→⅛ rolls that slip back.
+   - `out_stop`: the end.
+4. **Compiler** (`compose/compiler.py`). Moves become a recipe (C5 v2, anchored), or a list of errors:
+   - bars outside either track, or past B's end;
+   - stem moves without stems;
+   - two moves on one control at once;
+   - a crossfader that never reaches B;
+   - no `in_enter` / `out_stop`.
+5. **Critic** (`compose/critic.py`), rules-based and deterministic. It simulates the mix bar by bar from the analysis data (per-band energy and loudness of each deck, through crossfader, volume, EQ, filter and stem gains) and scores, with reasons:
+   - **clashes:** bass (both lows strong), vocals (both voiced, when known), key (tonal overlap at Camelot distance > 1);
+   - **level:** dips and spikes in total loudness;
+   - **structure:** phrase alignment, entry and exit sections, overlap length, plan complexity.
+
+   Jev (TypeSafe System One) can later re-rank the critic's top-k behind the same interface (read its API docs first; needs a key).
+6. **Output (C6).** Per pair: compatibility facts, every candidate (source `llm` / `rules`, plan, compiled recipe, critic score, breakdown and reasons) and the best index.
+
+**Web.** The player runs anchored recipes: it waits for A's exit bar and starts B from its entry bar (`playAt.fromBar`). The board loads `transitions.json`, and "Try transition" offers the best composed transitions for the loaded pair before the presets.
+
+**Progress (2026-10-05).** Everything but the live LLM run is built and tested.
+- **Recipe contract C5 v2:** anchor, and per-deck stem requirements. The five presets are migrated.
+- **`compose/`:** facts, moves, compiler, critic, rules composer, and a Claude composer (`claude-opus-5-5`, structured outputs, prompt-cached system prompt, disk cache, refusal fallback).
+- **`plan_transitions.py`** writes C6, with the shared fixture checked from both sides.
+- **Board:** `playAt.fromBar`, the anchored player, and a picker with "Composed for this pair".
+- **Tests:** 28 pipeline tests for this chunk, 82 web tests, and the browser recipe test playing the demo pair's best composed transition (steps on the bar, B in from its entry bar at 0.0 ms, end state as compiled).
+- **Rules composer over the whole library** (240 pairs): every candidate compiles.
+  - Tempo-incompatible pairs (141) can only cut, so Echo out wins there.
+  - Key-compatible pairs (28): Bass swap blend wins 19.
+  - Key-clash pairs (71): cuts win 60.
+- **Live composer** (2026-10-05; built by a Codex session, finished and verified here):
+  - **The board asks for a transition on demand.** "Compose with AI" sends a pick of the outgoing track's phrase (any future phrase, mid-track included), a maximum length (8/16/32 bars) and a creative brief to `POST /api/composer/compose` (local FastAPI, `backend/app.py`, through Vite's proxy).
+  - **The backend** composes with Claude, then compiles, critiques and merges into `transitions.json`. The board pre-selects the best idea for review; nothing autoplays.
+  - **Vocabulary v2** adds `volume` (tease, breath before a drop) and `rhythmic_gate` (beat chops). The compiler requires B to end at neutral settings (full volume, flat EQ, filter open, all stems on). Exits and entries may be any phrase with at least 8 bars left.
+  - **Guard rails:** the key stays server-side; requests are only accepted from the local board; one composition at a time; track ids are checked against the library; candidate ids are content-hashed, so repeated compositions merge.
+  - **Live results:**
+    - Demo pair: 4 of 4 ideas compiled and passed the critic (90.9–93.7).
+    - zaza "With My Crew" → A P L 0 "EvenFall", exiting mid-track at bar 32: 58 s, about $0.15. 3 of 4 compiled; the rejected one closed two filters on B at once and never reopened them. Ideas: a percussion relay with a loop roll (91.3), gated call-and-response (88.2), stem tease/retract with an echo cut (83.8). The best played end to end in Chromium: 6 steps at 0.00 ms, B in on its bar 32 at 0.00 ms.
+  - **Tests:** `pipeline/tests/test_live_composer.py` (HTTP boundary, constraints reach the model, no secrets in errors); `web/e2e/composer.py` (UI and mid-track gated relay, with a canned reply); `web/e2e/composer_live.py` (opt-in, costs one real call).
+- **Across genres, tempos and keys** (2026-10-05). The composer was good on similar tracks in one key, poor across genres or keys.
+  - **Diagnosis:**
+    - Unsyncable pairs (tempo gap > 8%, or a drifting tempo) could never overlap at all, so Claude could only cut or echo out.
+    - Keys were judged as written. But the board has no key lock: synced, B is transposed by 12·log2(BPM_A/BPM_B) semitones. 124 vs 128 BPM puts B 55 cents flat whatever its key.
+  - **Facts:** per-bar presence of every stem against the mix (`stems.json`), and four-bar windows with `drums` (0 = beatless) and `tonal` (0 = drums only). Pair facts add `tempo.gap_pct`, `tempo.tempo_ride` and `key.when_locked` (the key B is heard in, and the detune in cents).
+  - **Critic:**
+    - **Keys:** clash only when pitched parts (bass, other, vocals) overlap, judged by the key as heard plus detune.
+    - **Rhythm:** when the decks aren't locked, two rhythms together for half a bar or more makes a plan invalid (a train wreck). A beat under a beatless breakdown, or an a cappella over drums, is fine at any tempo.
+    - **Ride:** sliding A's pitch under its melody costs a little.
+  - **Moves v3:**
+    - `tempo_ride`: A glides within its ±8% fader towards B's own tempo, and B syncs the rest as it enters. This reaches pairs up to ~16% apart, and B plays at its own tempo and pitch whenever the gap is ≤ 8%.
+    - `brake`: a turntable stop on the audio clock.
+    - B may now enter on the bar A stops (a hard cut).
+  - **Prompt:** a playbook: drum bridge, breakdown bridge, a cappella handoff, tempo ride, hard switch on the one, half/double time.
+  - **Contracts:** Recipe v3 (outgoing `tempo` lane, ramps only; `brake` event), Transitions v3, command `brakeAt` (add-only).
+  - **Planner:**
+    - It now merges candidates. Rerunning the rules planner used to replace each saved pair and drop its paid LLM candidates.
+    - Pairs saved by an older version are recompiled from their plans, and `--recompile` rescores saved plans, both without calls.
+  - **Library:** 30 tracks, 14 new: hip-hop, drum & bass (read at half time, 90 BPM), dubstep ×2, trap, deep house, disco, funk ×2, breakbeat ×2, downtempo ×2, ambient. 5 of the new ones drift, so they're unlockable.
+    - **How the 870 pairs lock:** 212 directly, 170 more with a tempo ride, 408 involve a drifting track, 80 are too far apart.
+    - **Of the 382 lockable pairs:** 42 "compatible" on paper clash as heard, and 22 the other way round.
+  - **Live** (4 hard pairs, $0.65, 51–87 s each): 12 of 16 ideas compiled at first. The 4 rejects were brakes landing B on the stop bar, now allowed: 16/16 compile, 14/16 valid. The critic zeroed 2 train wrecks (unlocked beats overlapping for 1.1 and 5.4 bars). Best ideas:
+    - **Protohype → CR0SS** (145 vs 128, 5A vs 3A), drums-only tempo ride into B's vocal build, 91.6. The ride transposes B to 5A, A's own key.
+    - **Disco → swung hip-hop** (unlockable): A's drums-only outro under B's beatless intro, 92.0; and the "September" a cappella over the hip-hop drums, 91.5.
+    - **San Pacho → Kool Karlo** (unlockable): B's vocal teased over A's groove, then an echo cut, 91.4.
+    - **Dubstep → deep house:** still a cut (88). Claude's rides kept A's bass audible, and the critic charged the 1.4-semitone slide.
+  - **Played in Chromium on the real tracks:**
+    - The ride: A at 0.92, B at 1.042, worst phase 0.20 ms over 864 frames.
+    - A brake: rate 1.00 → 0.00, then B on the bar.
+    - The a cappella: B on A's bar within 1.2 ms, then free tempo by design.
+    
+    All steps were applied and there were no page errors.
+  - **Not judged by ear yet.** In particular: whether 40 cents of detune is the right free allowance, and the rhythm weights.
 
 **Definition of done.**
-- `transitions.json` validates against its schema for every pair.
-- Every candidate carries its legality reasons and Jev's probabilities.
-- A rerun with a warm cache makes zero network calls.
+- The compiler and critic are unit-tested: every move compiles; each rejection reason fires; each critic penalty fires on a synthetic case.
+- The composer is tested against recorded responses; a rerun with a warm cache makes zero network calls.
+- `transitions.json` validates for every pair, and every candidate carries its plan, recipe, score and reasons.
+- In the browser test, a composed transition plays end to end on the demo pair (steps on the bar, end state as compiled).
+- Run live on the real library: report cost, the share of LLM plans that compile, and how LLM and rules candidates score under the critic.
 
 ## Chunk 8: Backend
 
@@ -427,3 +538,45 @@ Cut order if time runs out: voice, then guided mode, then live re-ranking (use o
   - **Pinch press** = tip ratio < 0.25 and (tip − joint) < 0.1; release > 0.35. The joint guard separates a relaxed thumb from a sloppy pinch, which tip distance alone can't.
   - **User-adjustable grab threshold** (0.18–0.32, localStorage) because hands and cameras differ.
   - **Twist:** no hand double-press reset; palm reference and angle filter re-taken at each pinch; ends re-base.
+- **2026-10-04** Beat grid phase comes in two steps.
+  - **Which position is the beat:** chosen by the kick-weighted search (robust to offbeat hats).
+  - **Where exactly it is:** a full-band onset search within ±⅛ beat (`ATTACK_WINDOW_BEATS`), so the grid sits on the attack you hear, not a swelling kick's low end. The window is wide enough for a ~50 ms swell lag at 128 BPM (58 ms) and excludes 16ths (¼ beat) and offbeats (½).
+  - **Drift** is measured on the same envelope and window. On real tracks: 11 of 14 beatmatchable (was 5 of 14), demo ground truth 4.2 / 4.6 ms (limit 10). Pipeline 0.2.1.
+- **2026-10-04** `analysis.json` beats are stored to 1 µs (was 0.1 ms) because sync derives its rate from the local beat interval. Pipeline 0.2.2. Not a schema change (precision isn't specified).
+- **2026-10-04** The smoke test loads the demo tracks by title, not "the first two rows". Real tracks now sort before them in the library.
+- **2026-10-05** Chunk 6, transition recipes:
+  - **Recipe clock:** recipe bars run on the outgoing deck's grid from a phrase boundary at least 1 bar ahead. During a roll, the slip anchor keeps that clock running.
+  - **Exact steps and starts** (`setControlAt`, `playAt`) are scheduled on the audio clock. The store follows by timer, which only does bookkeeping. Ramps are written to the store each 25 ms tick and smoothed by the engine (12 ms).
+  - **pause / loop / loopOff fire just after their bar**, never before: the engine floors loop starts to the grid, so early would loop the previous unit.
+  - **Echo:** ¾ beat, feedback 0.45, band-limited repeats (250 Hz–5 kHz), fed post-crossfader and returned straight to the master.
+  - **The incoming deck syncs at arm time** when the recipe requires beatmatching, and `playAt` starts it from its nearest bar line.
+- **2026-10-05** Browser tests run Chromium with `--disable-audio-output` (the real Web Audio graph renders into a fake sink). With the Mac's output device in a bad state, even an empty AudioContext's clock stalled (5 ms per second) and every timing check failed. Tests also no longer play through the speakers.
+- **2026-10-05** The smoke test's hand check asserts that inference runs (≥ 10 frames), no longer ≥ 10 fps. Headless Chromium runs the model on a software GPU whose speed follows machine load: the same code measured 15 and 3 fps a minute apart, and the pre-Chunk-6 commit measured 3 fps too. Real cost is measured headed (9.6 ms on an M3 Max).
+- **2026-10-05** Chunk 7 reworked: the AI composes per-pair transitions from a moves vocabulary (Claude, structured outputs), a deterministic compiler turns them into recipes, and a rules critic simulates the mix and scores them. Jev can re-rank later. The old plan (Jev scoring preset triples) needed no AI to pick among five presets.
+- **2026-10-05** Critic (provisional, to calibrate by ear in Chunk 11):
+  - **Bass clash** counts the bass part, not the low band, because overlapping kicks are just a blend. The first version flagged a correct bass swap.
+  - **Clean blending earns credit:** +0.5 per clean overlap bar, up to 16 bars, from a base of 88 so bonuses show. Before this, a cut couldn't be faulted and won 172 of 240 pairs, tying a clean blend at the cap.
+  - **Caught a real preset flaw:** Filter handoff brings B in through a low-pass that keeps its bass.
+- **2026-10-05** Demucs stems are separated from the mix at −6 dB with `--clip-mode none`, and the playback gain is recorded in TrackAnalysis v3 `audio.stems_gain_db` (pipeline 0.3.0). Reason: on loud masters a stem can peak above full scale, and Demucs's default then scales that whole stem down; drums came out 2.0–2.4 dB low, so the stems rebuilt the mix only to −15 dB. Integer FLAC can't hold values above 1.0 either. Now the rebuild reaches −29 to −35 dB with stem peaks ≤ 0.65 (`tests/test_stems.py`). Re-analysis keeps already-separated stems unless `--stems` is passed again.
+- **2026-10-05** DC offset is removed before and after Demucs. Demucs adds its input's mean back to every stem, so CR0SS (DC −0.017) got stems summing to 4× the offset and rebuilt only to −11 dB, and muting a stem with DC thumps. Now −26 dB with stem DC ≈ 0; `test_stems.py` covers it.
+- **2026-10-05** Vocal presence (composer and critic facts) is the vocal stem's level against the mix per bar: 0 at −24 dB, 1 at −14 dB. The first version measured against the stem's own loud bars, so bleed in an instrumental track (45–65 dB under the mix) read as vocals everywhere. Real vocals measured 3–17 dB under the mix; the synthetic demo's vocal bars come out exactly right.
+- **2026-10-05** Live composer:
+  - **Mid-track transitions:** exits and entries can be any phrase with at least 8 bars left. Previously exits had to be in A's second half and entries in B's first.
+  - **Vocabulary v2:** `volume` and `rhythmic_gate`; a gate owns its deck's volume lane for its whole interval.
+  - **B ends neutral:** the compiler rejects plans that leave B altered (volume, EQ, filter or a stem) at the end.
+  - **Transitions v2:** content-hashed candidate ids.
+  - **Local endpoint only:** loopback origin, one composition at a time. Not a public multi-user service; that's Chunk 8.
+  - **Cost:** about $0.15 per 4-idea composition with Opus 5.5 (input ≈3k tokens + 5.6k cached system prompt, output ≈5.7k tokens), about 40–60 s.
+- **2026-10-05** Across genres and keys:
+  - **Keys as heard.** The board has no key lock, so a locked deck is transposed by the tempo ratio. Facts and critic compare the key B is heard in (`mix.key_relation`), and detune costs nothing up to 40 cents, rising to half a key step at 60. Calibrated on the user's report that zaza ↔ EvenFall blends (41 cents) "worked really well". Re-check by ear the demo pair (55 cents) and TEKTULA → Protohype (61 cents). The real fix is key lock (a time-stretching player, e.g. an AudioWorklet), which would also allow key shifting.
+  - **Stem presence:** every stem's level against the mix, per bar, on the vocal scale (−24..−14 dB → 0..1). It's cached in `stems.json`, which replaces `vocals.json`.
+  - **Rhythm clash** (only when the decks aren't locked): each deck's rhythmic level is max(drums, 0.7·bass, 0.5·other), from presence × stem gain through EQ and filter. Both decks above 0.3 counts as a clash, and half a bar or more is invalid. Without stems, any unlocked overlap is invalid, as before.
+  - **Tempo ride:**
+    - A's tempo lane ramps (≤ 1% per bar) to B's own tempo, clamped to ±8%. B enters at or after the end and syncs then; the player lands the ride on its final value first.
+    - It's a ramp only, because the engine applies tempo when written, not as an exact step.
+    - Before its first change the player keeps A's current tempo, so a deck already pitched doesn't snap to 0.
+  - **Brake:** a playbackRate ramp to 0 on the audio clock. The deck's anchor is left alone, so the bar clock that times the rest of the recipe and B's entry runs on. The compiler adds a volume step to 0 at the brake's end, because a stopped source holds its last sample (DC).
+  - **B may enter on A's stop bar.** All 4 of Claude's first brake plans did this, and the old rule threw them away.
+  - **The planner merges** new candidates into saved pairs (by content-hashed id), the same as the backend, and recompiles pairs from an older transitions version from their stored plans.
+- **2026-10-05** Track selection: `fetch_audius.py` adds `--sort popular`, `--min-plays` and a 1.5–10 minute window (skips DJ mixes and skits). A plain genre search returned four 25–108 minute mixes, a skit, and barely played uploads the user rejected by ear. Plays are a rough quality signal; vocals are confirmed after preprocessing from the stems, not the title.
+- **2026-10-05** `bpm_hint` overrides for 3 new tracks whose tempo the tracker misread: Broey (116.7, i.e. ⅔ of 175 → 175), Trivecta "Alaska" (156.6 → 150), Sheco "AM:PM" (118.8 → 125). Each was checked against an onset autocorrelation. Broey and Sheco then measure 12.1 and 11.5 ms of drift, just over the 10 ms beatmatchable limit, so they stay unlocked. Whether the limit is too tight for fast or busy genres is untested; check by ear before changing it.

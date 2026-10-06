@@ -13,7 +13,7 @@ describe("contract", () => {
     expect(() => assertTrackAnalysis(fixture)).not.toThrow();
   });
   it("rejects a wrong schema version", () => {
-    expect(() => assertTrackAnalysis({ ...fixture, schema_version: 1 })).toThrow(/schema_version/);
+    expect(() => assertTrackAnalysis({ ...fixture, schema_version: 2 })).toThrow(/schema_version/);
   });
 });
 

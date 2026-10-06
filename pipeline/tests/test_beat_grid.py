@@ -33,7 +33,7 @@ def render(kick_times: np.ndarray, breakdown: tuple[int, int] | None = None) -> 
     rng = np.random.default_rng(7)
     dur = kick_times[-1] + 2.0
     y = np.zeros(int(dur * M.SR))
-    k_snd = M.kick()
+    k_snd = M.kick()   # looked up at call time so tests can swap the kick
     hat = M.noise_burst(int(0.06 * M.SR), 0.02, rng, hp=6000)
     bass = M.tone(M.hz("A", 1), int(0.4 * PERIOD * M.SR), (1, .5, .25), tau=0.12)
     for i, t in enumerate(kick_times):
@@ -102,6 +102,30 @@ def test_half_beat_tracker_slips(steady, monkeypatch, tracker_bpm):
     y, truth = steady
     monkeypatch.setattr(librosa.beat, "beat_track", slipping_tracker(truth, tracker_bpm))
     check_grid(A.track_beats(y, A.ANALYSIS_SR, len(y) / A.ANALYSIS_SR), truth, y)
+
+
+def soft_kick() -> np.ndarray:
+    """A kick whose click is instant but whose low end swells over ~40 ms (layered/sidechained
+    sub). The kick band's onset then peaks ~40 ms after the attack you hear. Seen on real tracks
+    (Andres Mancias - technology: attack 48 ms before the 70-150 Hz peak)."""
+    n = int(0.35 * M.SR)
+    t = np.arange(n) / M.SR
+    swell = np.minimum(t / 0.045, 1.0) ** 2 * np.exp(-np.maximum(t - 0.045, 0) / 0.15)
+    body = np.sin(2 * np.pi * 55 * t) * swell
+    click = M.noise_burst(int(0.006 * M.SR), 0.0015, np.random.default_rng(3), hp=3000)
+    out = 0.9 * body
+    out[: len(click)] += 0.6 * click
+    return out
+
+
+def test_soft_kick_grid_sits_on_the_attack(monkeypatch):
+    """The grid (and drift) must follow the click, not the late low-end swell, and still not
+    the loud offbeat hats."""
+    truth = LEAD_S + PERIOD * np.arange(N_BEATS)
+    monkeypatch.setattr(M, "kick", soft_kick)
+    y = render(truth)
+    res = A.track_beats(y, A.ANALYSIS_SR, len(y) / A.ANALYSIS_SR)
+    check_grid(res, truth, y)
 
 
 def test_drifting_tempo_is_not_beatmatchable():

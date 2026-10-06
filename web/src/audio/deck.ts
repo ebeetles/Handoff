@@ -2,6 +2,10 @@
 //
 //   sources (mix, or 4 stems) -> per-source gain -> declick -> EQ low/mid/high
 //     -> low-pass -> high-pass -> volume -> [meter] -> crossfade gain -> engine master
+//                                                          \-> echo send -> delay <-> feedback
+//                                                                            \-> fxOut -> engine master
+// The echo is fed after the crossfader and returns straight to the master, so cutting the
+// deck (fader or crossfader) stops new input but lets the tail ring out, like a DJ mixer.
 //
 // Rules (see AGENTS.md):
 //  - All timing uses AudioContext.currentTime. Never setTimeout for audio events.
@@ -26,6 +30,8 @@ export interface LoadedTrack {
 
 const DECLICK_S = 0.006;
 const SMOOTH_TC = 0.012; // time constant for knob smoothing (setTargetAtTime)
+const ECHO_FEEDBACK = 0.45;   // each repeat ~7 dB down: a 3/4-beat tail lasts ~2 bars
+export const ECHO_BEATS = 0.75;
 
 export class Deck {
   track: LoadedTrack | null = null;
@@ -39,6 +45,7 @@ export class Deck {
 
   private sources = new Map<SourceKey, AudioBufferSourceNode>();
   private sourceGains = new Map<SourceKey, GainNode>();
+  private stemLevel = 1;   // linear gain that makes the stems add back up to the mix
   private readonly sum: GainNode;
   private readonly declick: GainNode;
   private readonly eqLow: BiquadFilterNode;
@@ -51,6 +58,9 @@ export class Deck {
   private readonly meterBuf = new Float32Array(1024);
   private meterHold = 0;
   readonly output: GainNode; // crossfade gain; engine connects this to master
+  private readonly echoSend: GainNode;
+  private readonly echoDelay: DelayNode;
+  readonly fxOut: GainNode;  // echo return; engine connects this to master
 
   constructor(private readonly ctx: AudioContext, readonly id: DeckId) {
     const c = ctx;
@@ -67,6 +77,16 @@ export class Deck {
     this.sum.connect(this.declick).connect(this.eqLow).connect(this.eqMid).connect(this.eqHigh)
       .connect(this.lowpass).connect(this.highpass).connect(this.volume).connect(this.output);
     this.volume.connect(this.meter);
+
+    this.echoSend = new GainNode(c, { gain: 0 });
+    this.echoDelay = new DelayNode(c, { maxDelayTime: 2, delayTime: 0.36 });
+    const hp = new BiquadFilterNode(c, { type: "highpass", frequency: 250 });   // repeats get thinner
+    const lp = new BiquadFilterNode(c, { type: "lowpass", frequency: 5000 });   // ... and darker
+    const fb = new GainNode(c, { gain: ECHO_FEEDBACK });
+    this.fxOut = c.createGain();
+    this.output.connect(this.echoSend).connect(this.echoDelay).connect(hp).connect(lp);
+    lp.connect(fb).connect(this.echoDelay);
+    lp.connect(this.fxOut);
   }
 
   get now(): number {
@@ -93,8 +113,9 @@ export class Deck {
     this.sourceGains.forEach((g) => g.disconnect());
     this.sourceGains.clear();
     this.track = track;
+    this.stemLevel = track.usingStems ? 10 ** ((track.analysis.audio.stems_gain_db ?? 0) / 20) : 1;
     for (const key of track.buffers.keys()) {
-      const g = this.ctx.createGain();
+      const g = new GainNode(this.ctx, { gain: key === "mix" ? 1 : this.stemLevel });
       g.connect(this.sum);
       this.sourceGains.set(key, g);
     }
@@ -197,6 +218,17 @@ export class Deck {
     this.sources.forEach((s) => s.playbackRate.setValueAtTime(rate, at));
   }
 
+  /** Ramp the playing sources' rate to a stop between `at` and `at + dur` (a turntable brake).
+   *  The anchor is left alone (see AudioEngine.brakeAt); pause() afterwards stops the sources, and
+   *  the next play starts fresh ones at the anchor's rate. */
+  brake(at: number, dur: number): void {
+    this.sources.forEach((s) => {
+      s.playbackRate.cancelScheduledValues(at);
+      s.playbackRate.setValueAtTime(this.anchor.rate, at);
+      s.playbackRate.linearRampToValueAtTime(0, at + dur);
+    });
+  }
+
   setLoop(loop: Loop | null): void {
     this.anchor = reanchor(this.anchor, this.now, { loop });
     this.sources.forEach((s) => {
@@ -231,32 +263,42 @@ export class Deck {
 
   // ------------------------------------------------------------ mixer params
 
-  setEq(band: "low" | "mid" | "high", v: number): void {
+  // Mixer params. `when` (AudioContext time, default now) lets automation land a step exactly.
+  setEq(band: "low" | "mid" | "high", v: number, when = this.now): void {
     const node = band === "low" ? this.eqLow : band === "mid" ? this.eqMid : this.eqHigh;
-    node.gain.setTargetAtTime(eqDb(v), this.now, SMOOTH_TC);
+    node.gain.setTargetAtTime(eqDb(v), when, SMOOTH_TC);
   }
 
-  setFilter(v: number): void {
+  setFilter(v: number, when = this.now): void {
     const p = filterParams(v);
-    this.lowpass.frequency.setTargetAtTime(p.lowpassHz, this.now, SMOOTH_TC);
-    this.highpass.frequency.setTargetAtTime(p.highpassHz, this.now, SMOOTH_TC);
-    this.lowpass.Q.setTargetAtTime(p.q, this.now, SMOOTH_TC);
-    this.highpass.Q.setTargetAtTime(p.q, this.now, SMOOTH_TC);
+    this.lowpass.frequency.setTargetAtTime(p.lowpassHz, when, SMOOTH_TC);
+    this.highpass.frequency.setTargetAtTime(p.highpassHz, when, SMOOTH_TC);
+    this.lowpass.Q.setTargetAtTime(p.q, when, SMOOTH_TC);
+    this.highpass.Q.setTargetAtTime(p.q, when, SMOOTH_TC);
   }
 
-  setVolume(v: number): void {
-    this.volume.gain.setTargetAtTime(volumeGain(v), this.now, SMOOTH_TC);
+  setVolume(v: number, when = this.now): void {
+    this.volume.gain.setTargetAtTime(volumeGain(v), when, SMOOTH_TC);
   }
 
-  setCrossfadeGain(g: number): void {
-    this.output.gain.setTargetAtTime(g, this.now, SMOOTH_TC);
+  setCrossfadeGain(g: number, when = this.now): void {
+    this.output.gain.setTargetAtTime(g, when, SMOOTH_TC);
+  }
+
+  setEcho(v: number, when = this.now): void {
+    this.echoSend.gain.setTargetAtTime(v, when, SMOOTH_TC);
+  }
+
+  /** Delay time in seconds (the engine keeps it at ECHO_BEATS of the playing tempo). */
+  setEchoTime(seconds: number): void {
+    this.echoDelay.delayTime.setTargetAtTime(Math.min(2, Math.max(0.01, seconds)), this.now, 0.05);
   }
 
   setStem(stem: StemName, on: boolean, when: number): void {
     const g = this.sourceGains.get(stem);
     if (!g) return; // track has no stems
     g.gain.cancelScheduledValues(when);
-    g.gain.setTargetAtTime(on ? 1 : 0, when, 0.004);
+    g.gain.setTargetAtTime(on ? this.stemLevel : 0, when, 0.004);
   }
 
   get hasStems(): boolean {

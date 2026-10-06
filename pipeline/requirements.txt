@@ -5,3 +5,4 @@ jsonschema>=4.21
 pytest>=8
 # Optional, for --stems (large: pulls in PyTorch). Install separately:
 #   pip install demucs
+anthropic>=1.11

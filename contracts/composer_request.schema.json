@@ -1,0 +1,70 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "out_track": {
+      "maxLength": 200,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "title": "Out Track",
+      "type": "string"
+    },
+    "in_track": {
+      "maxLength": 200,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "title": "In Track",
+      "type": "string"
+    },
+    "out_start_bar": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Out Start Bar"
+    },
+    "min_start_bar": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Min Start Bar",
+      "type": "integer"
+    },
+    "max_bars": {
+      "default": 16,
+      "maximum": 32,
+      "minimum": 4,
+      "title": "Max Bars",
+      "type": "integer"
+    },
+    "candidates": {
+      "default": 4,
+      "maximum": 6,
+      "minimum": 1,
+      "title": "Candidates",
+      "type": "integer"
+    },
+    "brief": {
+      "default": "Creative, energetic, track-specific transitions",
+      "maxLength": 500,
+      "title": "Brief",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "out_track",
+    "in_track"
+  ],
+  "title": "ComposeRequest",
+  "type": "object"
+}
