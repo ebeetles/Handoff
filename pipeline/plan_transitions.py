@@ -175,7 +175,11 @@ def load_saved(path: Path, track: Callable[[str], object | None]) -> dict[tuple[
 def merge_pair(saved: dict | None, new: dict) -> dict:
     """`new` composed for a pair, keeping candidates saved before (other exits, other composers:
     LLM compositions cost money). Same id = same plan, replaced by the new copy; best re-ranked."""
-    candidates = {c["id"]: c for c in (saved or {}).get("candidates", []) + new["candidates"]}
+    # The rules are regenerated on every run: a new set replaces the saved one (their ids hash
+    # their content, so after any change to the rules the old ones piled up). LLM candidates stay.
+    fresh = {c["source"] for c in new["candidates"]}
+    kept = [c for c in (saved or {}).get("candidates", []) if not (c["source"] == "rules" and "rules" in fresh)]
+    candidates = {c["id"]: c for c in kept + new["candidates"]}
     out = {**new, "candidates": list(candidates.values())}
     if new.get("composer") is None and saved:
         out["composer"] = saved.get("composer")

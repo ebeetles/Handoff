@@ -4,8 +4,8 @@ import { assertTrackAnalysis, type TrackAnalysis } from "../contracts/track";
 import { composeLive } from "../coDJ/composer";
 import { useServices } from "./context";
 
-export function ComposerPanel({ out, inn, onClose, onPick }: {
-  out: DeckSnapshot; inn: DeckSnapshot; onClose: () => void; onPick: (id: string) => void;
+export function ComposerPanel({ out, inn, outDeck, inDeck, onClose, onPick }: {
+  out: DeckSnapshot; inn: DeckSnapshot; outDeck: "A" | "B"; inDeck: "A" | "B"; onClose: () => void; onPick: (id: string) => void;
 }) {
   const { transitions } = useServices();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -68,7 +68,8 @@ export function ComposerPanel({ out, inn, onClose, onPick }: {
     <form onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <div className="composer-heading"><h2>Compose a transition</h2>
         <button type="button" className="text-button" onClick={onClose} aria-label="Close composer">Close</button></div>
-      <p>{out.title} → {inn.title}</p>
+      <p>From deck {outDeck}: <strong>{out.title}</strong> → into deck {inDeck}: <strong>{inn.title}</strong>
+        <br /><small>Wrong way round? Close this and use the {outDeck} → {inDeck} button to swap.</small></p>
       <label>Start on the outgoing track
         <select aria-label="Composer exit phrase" value={exit ?? ""} disabled={working || !track} onChange={(e) => setExit(Number(e.target.value))}>
           {exit === null && <option value="">No future phrase available</option>}

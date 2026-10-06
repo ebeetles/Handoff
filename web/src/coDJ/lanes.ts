@@ -1,7 +1,7 @@
 // Pure recipe math: lane interpolation, steps, key distance, and whether a recipe can run on
 // the two loaded decks. No audio, no clock; automation.ts drives these.
-import { tempoRate } from "../audio/mapping";
-import { chooseSync } from "../audio/sync";
+import { keySemitones, tempoRate } from "../audio/mapping";
+import { chooseSync, transposeCamelot } from "../audio/sync";
 import type { DeckSnapshot } from "../audio/engine";
 import type { ControlId, DeckId } from "../control/controls";
 import type { Lane, Point, Recipe } from "../contracts/recipe";
@@ -27,6 +27,29 @@ export function laneSteps(points: readonly Point[]): { bar: number; value: numbe
 }
 
 export const isToggleLane = (l: Lane) => l.control.startsWith("stem.");
+
+/** The key shift a recipe gives the incoming deck (its key lane; 0 = none). */
+export const planKeyShift = (r: Recipe): number => {
+  const l = r.lanes.find((x) => x.deck === "in" && x.control === "key");
+  return l ? keySemitones(l.points[0]![1]) : 0;
+};
+
+/** The key shift the incoming track should actually get. A plan's shift is relative to the
+ *  outgoing track's written key, but the outgoing deck may itself be shifted (it came in matched
+ *  to something else). So keep the key relation the plan intended, measured against the key the
+ *  outgoing deck is heard in, with the smallest shift (ties: nearest the plan's own). Going back
+ *  A -> B -> A, a track that already matches stays in its own key instead of the two swapping. */
+export function incomingKeyShift(o: { outWritten: string; outShift: number; inWritten: string; planShift: number }): number {
+  const intended = camelotDistance(o.outWritten, transposeCamelot(o.inWritten, o.planShift));
+  const heard = transposeCamelot(o.outWritten, o.outShift);
+  const relative = Math.max(-6, Math.min(6, o.planShift + o.outShift));
+  let best: number | null = null;
+  for (let s = -6; s <= 6; s++) {
+    if (camelotDistance(heard, transposeCamelot(o.inWritten, s)) > intended) continue;
+    if (best === null || Math.abs(s) < Math.abs(best) || (Math.abs(s) === Math.abs(best) && Math.abs(s - relative) < Math.abs(best - relative))) best = s;
+  }
+  return best ?? relative;
+}
 
 /** The outgoing deck's tempo ride, if the recipe has one. */
 export const rideLane = (r: Recipe): Lane | undefined => r.lanes.find((l) => l.deck === "out" && l.control === "tempo");
@@ -79,9 +102,11 @@ export function blockers(r: Recipe, out: DeckSnapshot, inn: DeckSnapshot): strin
     else if (!chooseSync(inn.trackBpm, outBpm)) why.push(`the tempos are too far apart (${inn.trackBpm.toFixed(0)} vs ${outBpm.toFixed(0)} BPM)`);
   }
   const max = r.requires.max_camelot_distance;
-  // The keys as heard: with key lock, each deck's own key plus its key shift.
-  if (max !== null && camelotDistance(out.heardCamelot || out.camelot, inn.heardCamelot || inn.camelot) > max) {
-    why.push(`the keys clash (${out.heardCamelot || out.camelot} and ${inn.heardCamelot || inn.camelot})`);
+  // The keys as they will be heard: the incoming deck gets the shift the player will give it.
+  const inHeard = transposeCamelot(inn.camelot, incomingKeyShift({ outWritten: out.camelot, outShift: out.keyShift, inWritten: inn.camelot, planShift: planKeyShift(r) }));
+  const outHeard = out.heardCamelot || out.camelot;
+  if (max !== null && camelotDistance(outHeard, inHeard) > max) {
+    why.push(`the keys clash (${outHeard} and ${inHeard})`);
   }
   return why;
 }

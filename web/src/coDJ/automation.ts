@@ -23,7 +23,8 @@ import type { DeckSnapshot } from "../audio/engine";
 import type { Command } from "../control/commands";
 import { CONTROL_DEFS, type ControlId, type ControlStore, type DeckId } from "../control/controls";
 import type { Lane, Recipe, RecipeEvent } from "../contracts/recipe";
-import { blockers, isToggleLane, laneControl, laneSteps, laneValueAt, rideFrom, rideLane, toStoreValue } from "./lanes";
+import { keyValue } from "../audio/mapping";
+import { blockers, incomingKeyShift, isToggleLane, laneControl, laneSteps, laneValueAt, planKeyShift, rideFrom, rideLane, toStoreValue } from "./lanes";
 
 export const TICK_MS = 25;
 export const LOOKAHEAD_S = 0.1;
@@ -89,14 +90,15 @@ export class AutomationPlayer {
     return () => this.listeners.delete(fn);
   }
 
-  /** Why `recipe` can't start now (empty = it can), and which way it would go. */
-  check(recipe: Recipe): { out: DeckId; inn: DeckId; reasons: string[] } {
+  /** Why `recipe` can't start now (empty = it can), and which way it would go. `outDeck`: the
+   *  direction the DJ chose (presets); a composed recipe always leaves from its own track. */
+  check(recipe: Recipe, outDeck?: DeckId): { out: DeckId; inn: DeckId; reasons: string[] } {
     const a = this.view.snapshot("A"), b = this.view.snapshot("B");
     // A composed recipe goes out of the deck holding its outgoing track. Otherwise the outgoing
     // deck is the one playing; if both are, the one the crossfader favours.
     const anchored = recipe.anchor?.out_track;
     const out: DeckId = anchored ? (b.trackId === anchored ? "B" : "A")
-      : a.playing && b.playing ? (this.store.get("xfader") <= 0.5 ? "A" : "B") : b.playing ? "B" : "A";
+      : outDeck ?? (a.playing && b.playing ? (this.store.get("xfader") <= 0.5 ? "A" : "B") : b.playing ? "B" : "A");
     const inn: DeckId = out === "A" ? "B" : "A";
     const reasons = this.plan ? ["a transition is already running"] : blockers(recipe, this.view.snapshot(out), this.view.snapshot(inn));
     if (!reasons.length && recipe.anchor && this.view.barAt(out, this.view.ctx.currentTime) > recipe.anchor.out_start_bar - MIN_LEAD_BARS) {
@@ -106,8 +108,8 @@ export class AutomationPlayer {
   }
 
   /** Arm `recipe` to start on the outgoing deck's next phrase (at least a bar away). */
-  start(recipe: Recipe): PlayerStatus {
-    const { out, inn, reasons } = this.check(recipe);
+  start(recipe: Recipe, outDeck?: DeckId): PlayerStatus {
+    const { out, inn, reasons } = this.check(recipe, outDeck);
     if (reasons.length) return this.set({ ...IDLE, state: "error", recipe, message: `Can't start ${recipe.name}: ${reasons.join("; ")}.` });
     let startBar: number | null;
     if (recipe.anchor) {
@@ -122,10 +124,14 @@ export class AutomationPlayer {
     }
 
     const riding = rideLane(recipe) !== undefined;
+    // The incoming key: the plan's key relation, kept against the key the outgoing deck is heard in.
+    const os = this.view.snapshot(out), is = this.view.snapshot(inn);
+    const inKey = keyValue(incomingKeyShift({ outWritten: os.camelot, outShift: os.keyShift, inWritten: is.camelot, planShift: planKeyShift(recipe) }));
     if (recipe.requires.beatmatchable && !riding) this.dispatch({ type: "sync", deck: inn });
     const lanes = recipe.lanes.map((compiled) => {
       const id = laneControl(compiled, out, inn);
-      const lane = compiled.control === "tempo" ? rideFrom(compiled, this.store.get(id)) : compiled;
+      const lane = compiled.control === "tempo" ? rideFrom(compiled, this.store.get(id))
+        : compiled.deck === "in" && compiled.control === "key" ? { ...compiled, points: [[0, inKey]] as Lane["points"] } : compiled;
       const first = toStoreValue(lane, lane.points[0]![1], out);
       // The incoming deck is silent: set its starting values now. Lanes on what's audible
       // (outgoing deck, crossfader) glide from where they are over the first bar.
@@ -133,6 +139,7 @@ export class AutomationPlayer {
       const glideFrom = lane.deck === "in" || isToggleLane(lane) || lane.control === "tempo" ? null : this.store.get(id);
       return { lane, id, glideFrom, last: null, steps: laneSteps(lane.points).map((s) => ({ ...s, done: false })) };
     });
+    if (!recipe.lanes.some((l) => l.deck === "in" && l.control === "key")) this.store.set(`${inn}.key`, inKey, "auto");
     this.plan = { recipe, out, inn, startBar, lanes, events: recipe.events.map((e) => ({ ...e, done: false })), taken: new Set() };
     this.stopTimer = this.timer.every(TICK_MS, () => this.tick());
     this.set({ state: "armed", message: "", recipe, out, in: inn, startBar, bar: this.relBar(this.view.ctx.currentTime), takenOver: [] });

@@ -167,7 +167,7 @@ button { font: inherit; color: inherit; }
 .meter-fill { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(to top, var(--deck) 70%, var(--hot)); }
 
 /* ---------- toggle chip */
-.chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--rule); background: var(--panel); cursor: pointer; font-family: var(--font-hw); font-size: 16px; font-weight: 600; }
+.chip { white-space: nowrap; flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--rule); background: var(--panel); cursor: pointer; font-family: var(--font-hw); font-size: 16px; font-weight: 600; }
 .chip .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); }
 .chip.on .dot { background: var(--ink); box-shadow: 0 0 8px var(--ink); }
 
@@ -252,6 +252,8 @@ button { font: inherit; color: inherit; }
 .topbar-center { display: grid; justify-items: center; gap: 2px; min-width: 0; }
 .transition { display: grid; justify-items: center; gap: 4px; }
 .transition-row { display: flex; gap: 8px; align-items: center; }
+.transition select { max-width: 30ch; text-overflow: ellipsis; }
+.transition .direction { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .transition select {
   background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 999px;
   padding: 7px 12px; font-family: var(--font-hw); font-size: 15px; font-weight: 600;

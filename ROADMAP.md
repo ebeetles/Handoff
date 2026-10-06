@@ -666,3 +666,8 @@ Cut order if time runs out: voice, then guided mode, then live re-ranking (use o
 
     None has key-clash bars. In Chromium, Crypto (4A) played heard as 2A (−2 st) beside A's 2A, synced within 0.01 ms.
   - **Bug found and fixed** (test first): the planner stored only out_start_bar and moves, so `in_key_shift` was lost from saved plans (recompiles and revision turns). 674 stored plans, mostly rules blends, were restored from their compiled key lanes.
+- **2026-10-06** Fixes from the user's testing:
+  - **Key shifts are relative to the key you hear.** A plan's `in_key_shift` assumes the outgoing track plays in its written key. After A → B (B shifted −2 to A's key), the plan back shifted A +2 to B's written key while B was still shifted: they swapped keys. The player now keeps the key relation a plan intended, measured against the outgoing deck's heard key, with the smallest shift (`incomingKeyShift`); presets match the heard key too. In Chromium, Morgan Page → Crypto → Morgan Page leaves both heard in 2A, Morgan Page unshifted.
+  - **The rules baseline is replaced on every planner run, not merged.** Its ids hash its content, so each change to the rules piled up another "Echo out" in the picker (up to 11 rules entries in a pair, now 5).
+  - **Direction is explicit:** an "A → B" button by the picker swaps which deck goes out. It follows the playing deck until clicked, and goes back to following after a transition finishes. Presets honour it, and the composer names both decks.
+  - **The transition status leads with the countdown** ("Starts in 2 bars · A → B · name"); long composed names hid it.

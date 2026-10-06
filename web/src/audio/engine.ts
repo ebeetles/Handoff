@@ -45,13 +45,14 @@ export interface DeckSnapshot {
    *  the tempo's pitch change with it off. heardCamelot is the key it is heard in. */
   pitchSemitones: number;
   heardCamelot: string;
+  keyShift: number;   // the key control, in semitones
 }
 
 const EMPTY: DeckSnapshot = {
   loaded: false, trackId: "", loading: null, error: null, title: "", artist: "", camelot: "", keyName: "", duration: 0,
   position: 0, playing: false, pending: false, rate: 1, trackBpm: 0, bpm: 0, barPos: 0, beatInBar: 0,
   phraseIndex: 0, phraseCount: 0, phraseBars: 16, barInPhrase: 0, barsToNextPhrase: 0, sectionLabel: "", loop: null, cue: 0,
-  level: 0, synced: false, hasStems: false, beatmatchable: true, pitchSemitones: 0, heardCamelot: "",
+  level: 0, synced: false, hasStems: false, beatmatchable: true, pitchSemitones: 0, heardCamelot: "", keyShift: 0,
 };
 
 export class AudioEngine {
@@ -433,7 +434,7 @@ export class AudioEngine {
       sectionLabel: section?.label ?? "",
       loop: deck.anchor.loop ? { beats: deck.anchor.loop.beats } : null,
       cue: deck.cuePos, level: deck.level(), synced: deck.synced, hasStems: deck.hasStems,
-      beatmatchable: a.tempo.beatmatchable,
+      beatmatchable: a.tempo.beatmatchable, keyShift: deck.keyShift,
       ...((): { pitchSemitones: number; heardCamelot: string } => {
         const locked = this.store.get("keyLock") > 0.5;
         const semis = locked ? deck.keyShift : 12 * Math.log2(rate);

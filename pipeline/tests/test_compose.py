@@ -732,3 +732,18 @@ def test_the_key_shift_survives_saving_recompiling_and_revising(tmp_path):
     assert again["recipe"]["lanes"] == c["recipe"]["lanes"]
     if len(calls) > 1:
         assert json.loads(calls[1]["messages"][1]["content"])["candidates"][0]["in_key_shift"] == -2
+
+
+def test_rerunning_the_rules_replaces_them_instead_of_piling_up():
+    """Rules candidates are regenerated on every run; their ids hash their content, so any change
+    to the rules (a new field) added a second 'Echo out' next to the first, run after run."""
+    import plan_transitions as P
+    a, b = track(), track("b")
+    old = P.plan_pair(a, b, "rules", None, 4)
+    for c in old["candidates"]:
+        c["id"] += "_old"                                                 # same ideas, older content
+    paid = {**old["candidates"][0], "id": "llm_paid", "source": "llm", "idea": "Paid for"}
+    saved = {**old, "candidates": old["candidates"] + [paid]}
+    merged = P.merge_pair(saved, P.plan_pair(a, b, "rules", None, 4))
+    ideas = [c["idea"] for c in merged["candidates"] if c["source"] == "rules"]
+    assert len(ideas) == len(set(ideas)) and "Paid for" in [c["idea"] for c in merged["candidates"]]

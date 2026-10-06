@@ -4,7 +4,7 @@ import type { Command } from "../control/commands";
 import { ControlStore, type DeckId } from "../control/controls";
 import { assertRecipe, type Recipe } from "../contracts/recipe";
 import { AutomationPlayer, LOOKAHEAD_S, TICK_MS, type TransportView } from "./automation";
-import { blockers, camelotDistance, laneSteps, laneValueAt, rideFrom } from "./lanes";
+import { blockers, camelotDistance, incomingKeyShift, laneSteps, laneValueAt, rideFrom } from "./lanes";
 import { RECIPES } from "./recipes";
 import { playable } from "./transitions";
 import { assertTransitions } from "../contracts/transitions";
@@ -18,7 +18,7 @@ function snap(o: Partial<DeckSnapshot> = {}): DeckSnapshot {
     loaded: true, trackId: "t", loading: null, error: null, title: "t", artist: "a", camelot: "8A", keyName: "", duration: 300,
     position: 0, playing: false, pending: false, rate: 1, trackBpm: 120, bpm: 120, barPos: 0, beatInBar: 0,
     phraseIndex: 0, phraseCount: 8, phraseBars: 16, barInPhrase: 0, barsToNextPhrase: 16, sectionLabel: "", loop: null,
-    cue: 0, level: 0, synced: false, hasStems: false, beatmatchable: true, pitchSemitones: 0, ...o,
+    cue: 0, level: 0, synced: false, hasStems: false, beatmatchable: true, pitchSemitones: 0, keyShift: 0, ...o,
     heardCamelot: o.heardCamelot ?? o.camelot ?? "8A",
   };
 }
@@ -296,5 +296,46 @@ describe("AutomationPlayer", () => {
     expect(() => assertRecipe(step)).toThrow(/can't step/);
     const inBrake = { ...base, events: [...base.events, { at_bar: 1, deck: "in" as const, command: "brake" as const, beats: 2 }] };
     expect(() => assertRecipe(inBrake)).toThrow(/only the outgoing deck brakes/);
+  });
+});
+
+describe("key shift follows the key you hear", () => {
+  it("going back, a track that already matches keeps its own key (no swap)", () => {
+    // A -> B: Crypto (4A) came in shifted -2 to The Longest Road's 2A. B -> A: the plan (made for
+    // the written keys) shifts The Longest Road +2 to 4A, but Crypto is heard in 2A: stay at 0.
+    expect(incomingKeyShift({ outWritten: "2A", outShift: 0, inWritten: "4A", planShift: -2 })).toBe(-2);
+    expect(incomingKeyShift({ outWritten: "4A", outShift: -2, inWritten: "2A", planShift: 2 })).toBe(0);
+  });
+  it("keeps the relation a plan intended, with the smallest shift", () => {
+    // Outgoing heard one semitone up (8A +1 = 3A); a compatible-as-written 9A follows it up.
+    expect(incomingKeyShift({ outWritten: "8A", outShift: 1, inWritten: "9A", planShift: 0 })).toBe(1);
+    expect(incomingKeyShift({ outWritten: "8A", outShift: 0, inWritten: "9A", planShift: 0 })).toBe(0);
+  });
+});
+
+describe("the player applies the heard-key shift", () => {
+  it("B -> A after A -> B: A comes back in its own key, not shifted to B's written key", () => {
+    // Deck B plays Crypto (4A), shifted -2 when it came in (heard 2A). The plan back to The Longest
+    // Road (2A) was composed for the written keys: shift it +2. The player gives it 0.
+    const back: Recipe = { ...recipe("bass_swap"), lanes: [...recipe("bass_swap").lanes, { deck: "in", control: "key", points: [[0, 0.5 + 2 / 12]] }] };
+    const r = rig("B", { outSnap: { camelot: "4A", keyShift: -2, heardCamelot: "2A" }, inSnap: { camelot: "2A" } });
+    r.store.set("A.key", 0.5 + 3 / 12, "mouse");            // left over from earlier
+    expect(r.player.start(back).state).toBe("armed");
+    expect(r.store.get("A.key")).toBeCloseTo(0.5);
+    r.runTo(r.barTime(16) + 1);
+    expect(r.store.get("A.key")).toBeCloseTo(0.5);         // and the lane doesn't put the plan's shift back
+  });
+  it("a recipe without a key lane still matches the key the outgoing deck is heard in", () => {
+    const r = rig("A", { outSnap: { camelot: "8A", keyShift: 1, heardCamelot: "3A" }, inSnap: { camelot: "9A" } });
+    r.player.start(recipe("bass_swap"));
+    expect(r.store.get("B.key")).toBeCloseTo(0.5 + 1 / 12);
+  });
+});
+
+describe("direction", () => {
+  it("a preset goes the way the DJ chose, even against the playing deck", () => {
+    const r = rig("A", { inSnap: { playing: false } });
+    expect(r.player.check(recipe("echo_out"), "B")).toMatchObject({ out: "B", inn: "A" });
+    expect(r.player.check(recipe("echo_out"))).toMatchObject({ out: "A", inn: "B" });   // default: the playing deck
   });
 });
