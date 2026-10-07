@@ -40,7 +40,10 @@ export interface PointerSample {
 }
 
 export type TargetSpec =
-  | { kind: "continuous"; control: ControlId; axis: "x" | "y"; travelPx?: number; twist?: boolean }
+  | { kind: "continuous"; control: ControlId; axis: "x" | "y"; travelPx?: number; twist?: boolean;
+      /** Value the control clicks into while dragged or twisted (its default), like a mixer's
+       *  centre detent. Added 2026-10-06 (optional, non-breaking). */
+      detent?: number }
   | { kind: "toggle"; control: ControlId }
   | { kind: "pad"; command: Command }
   | { kind: "seek"; deck: DeckId };
@@ -50,8 +53,29 @@ interface Grab {
   spec: TargetSpec;
   startX: number;
   startY: number;
-  startValue: number;
+  startValue: number;         // in "raw" travel space: the value, before any detent (detentToRaw)
   twistFrom: number | null;   // angle at grab when twisting a knob, else null
+}
+
+/** Half-width of a detent, as a share of the control's travel: ~6 px of a 160 px drag, or ~6
+ *  degrees of a twist, on each side of the default. */
+export const DETENT = 0.04;
+
+/** Travel ("raw", 0..1) -> value with a detent at d: a dead zone of +-DETENT around d holds the
+ *  value exactly at d; the rest is stretched so 0 and 1 are still reached and nothing jumps. */
+export function detentFromRaw(raw: number, d: number): number {
+  const r = Math.min(1, Math.max(0, raw)), lo = Math.max(0, d - DETENT), hi = Math.min(1, d + DETENT);
+  if (r < lo) return (r * d) / lo;
+  if (r > hi) return d + ((r - hi) * (1 - d)) / (1 - hi);
+  return d;
+}
+
+/** The inverse, for picking a drag up where the value is. */
+export function detentToRaw(v: number, d: number): number {
+  const lo = Math.max(0, d - DETENT), hi = Math.min(1, d + DETENT);
+  if (v < d) return (v * lo) / d;
+  if (v > d) return hi + ((v - d) * (1 - hi)) / (1 - d);
+  return d;
 }
 
 const DOUBLE_PRESS_MS = 350;
@@ -77,6 +101,14 @@ export class GestureController {
   readonly pointers = new Map<string, PointerSample>();
 
   constructor(private store: ControlStore, private dispatch: (c: Command) => void) {}
+
+  /** Is this element (or one it sits in) a registered control? */
+  isTarget(node: EventTarget | null): boolean {
+    for (let el = node instanceof Element ? node : null; el; el = el.parentElement) {
+      if (this.targets.has(el as HTMLElement)) return true;
+    }
+    return false;
+  }
 
   register(el: HTMLElement, spec: TargetSpec): () => void {
     this.targets.set(el, spec);
@@ -195,7 +227,9 @@ export class GestureController {
         this.store.setHeld(spec.control, true);
         el.dataset.grabbed = "true";
         const twistFrom = spec.twist && p.angle !== undefined ? p.angle : null;
-        this.grabs.set(p.id, { el, spec, startX: p.x, startY: p.y, startValue: this.store.get(spec.control), twistFrom });
+        const value = this.store.get(spec.control);
+        const startValue = spec.detent === undefined ? value : detentToRaw(value, spec.detent);
+        this.grabs.set(p.id, { el, spec, startX: p.x, startY: p.y, startValue, twistFrom });
       }
     }
   }
@@ -211,7 +245,7 @@ export class GestureController {
       // Past an end: move the reference so this angle maps exactly to the end.
       if (v > 1) g.twistFrom = p.angle - (1 - g.startValue) * TWIST_RANGE_RAD;
       else if (v < 0) g.twistFrom = p.angle + g.startValue * TWIST_RANGE_RAD;
-      this.store.set(g.spec.control, v, this.src(p));
+      this.store.set(g.spec.control, this.withDetent(g.spec, v), this.src(p));
       return;
     }
     const r = g.el.getBoundingClientRect();
@@ -222,7 +256,11 @@ export class GestureController {
       const over = (v > 1 ? v - 1 : v) * travel;   // px past the end (signed)
       if (g.spec.axis === "x") g.startX += over; else g.startY -= over;
     }
-    this.store.set(g.spec.control, v, this.src(p));
+    this.store.set(g.spec.control, this.withDetent(g.spec, v), this.src(p));
+  }
+
+  private withDetent(spec: TargetSpec, raw: number): number {
+    return spec.kind === "continuous" && spec.detent !== undefined ? detentFromRaw(raw, spec.detent) : raw;
   }
 
   private release(p: PointerSample): void {

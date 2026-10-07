@@ -2,7 +2,7 @@
 // with the GestureController (useHitTarget) and render from the ControlStore.
 import type { ReactNode } from "react";
 import type { Command } from "../control/commands";
-import type { ControlId } from "../control/controls";
+import { CONTROL_DEFS, type ControlId } from "../control/controls";
 import { useControl, useHitTarget } from "./context";
 
 const TAU = Math.PI * 2;
@@ -18,17 +18,21 @@ function arc(cx: number, cy: number, r: number, a0: number, a1: number): string 
 
 export function Knob({ id, label, size = 66, bipolar = false }: { id: ControlId; label: string; size?: number; bipolar?: boolean }) {
   const v = useControl(id);
-  // Mouse: drag vertically. Hand: pinch and twist.
-  const ref = useHitTarget<HTMLDivElement>({ kind: "continuous", control: id, axis: "y", twist: true });
+  // Mouse: drag vertically. Hand: pinch and twist. Either way it clicks into its default.
+  const home = CONTROL_DEFS[id].default;
+  const ref = useHitTarget<HTMLDivElement>({ kind: "continuous", control: id, axis: "y", twist: true, detent: home });
   const c = size / 2, r = size / 2 - 7;
+  const aHome = START + home * SWEEP, onHome = v === home;
   const aV = START + v * SWEEP;
   const aFrom = bipolar ? START + 0.5 * SWEEP : START;
   const atRest = bipolar && Math.abs(v - 0.5) < 0.005;
   return (
-    <div className="knob" ref={ref} role="slider" aria-label={label} aria-valuenow={Math.round(v * 100)} aria-valuemin={0} aria-valuemax={100}>
+    <div className="knob" ref={ref} data-home={onHome || undefined} role="slider" aria-label={label} aria-valuenow={Math.round(v * 100)} aria-valuemin={0} aria-valuemax={100}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <path d={arc(c, c, r, START, START + SWEEP)} stroke="var(--rule)" strokeWidth={6} fill="none" strokeLinecap="round" />
         {!atRest && <path d={arc(c, c, r, Math.min(aFrom, aV), Math.max(aFrom, aV))} stroke="var(--deck, var(--ink))" strokeWidth={6} fill="none" strokeLinecap="round" />}
+        <line className="knob-home" x1={c + (r + 3) * Math.cos(aHome)} y1={c + (r + 3) * Math.sin(aHome)}
+          x2={c + (r + 6.5) * Math.cos(aHome)} y2={c + (r + 6.5) * Math.sin(aHome)} strokeWidth={2} strokeLinecap="round" />
         <circle cx={c} cy={c} r={r - 9} fill="var(--panel-2)" />
         <line x1={c + (r - 20) * Math.cos(aV)} y1={c + (r - 20) * Math.sin(aV)} x2={c + (r - 10) * Math.cos(aV)} y2={c + (r - 10) * Math.sin(aV)}
           stroke="var(--ink)" strokeWidth={3} strokeLinecap="round" />
@@ -38,9 +42,9 @@ export function Knob({ id, label, size = 66, bipolar = false }: { id: ControlId;
   );
 }
 
-export function Fader({ id, label, readout }: { id: ControlId; label: string; readout?: (v: number) => string }) {
+export function Fader({ id, label, readout, detent }: { id: ControlId; label: string; readout?: (v: number) => string; detent?: number }) {
   const v = useControl(id);
-  const ref = useHitTarget<HTMLDivElement>({ kind: "continuous", control: id, axis: "y" });
+  const ref = useHitTarget<HTMLDivElement>({ kind: "continuous", control: id, axis: "y", ...(detent === undefined ? {} : { detent }) });
   return (
     <div className="fader" ref={ref} role="slider" aria-label={label} aria-valuenow={Math.round(v * 100)} style={{ height: "100%" }}>
       <div className="fader-track">

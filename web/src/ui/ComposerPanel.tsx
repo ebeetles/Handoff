@@ -90,7 +90,7 @@ export function ComposerPanel({ out, inn, outDeck, inDeck, onClose, onPick }: {
       <p className="composer-hint">Choose any phrase, including the middle of the track. The composer chooses an entry in the other track, then checks and refines its plan. Review it, then press Try transition.</p>
       <p className="composer-hint">If playback passes your chosen phrase while composing, choose a later phrase and compose again.</p>
       <div role="status" className="composer-message">{passed && !working ? "That phrase has passed. Choose a later one." : message}</div>
-      <button className="text-button" type="submit" disabled={working || exit === null || passed || !track}>
+      <button className="text-button primary" type="submit" disabled={working || exit === null || passed || !track}>
         {working ? "Composing…" : "Compose transition"}
       </button>
     </form>

@@ -86,7 +86,11 @@ with sync_playwright() as p:
           "a hand 25 px from a knob locks onto it (outline + cursor on the knob)")
     hand(hx, hy, True, 0); hand(hx - 40, hy + 30, True, 0.5); pg.wait_for_timeout(100)
     v1 = int(knob.get_attribute("aria-valuenow"))
-    check(abs((v1 - v0) - 0.5 / (150 * 3.14159265 / 180) * 100) <= 1.5, f"twisting the pinched hand turns the knob ({v0} -> {v1})")
+    # Knobs click into their default (detent, gesture.ts DETENT = 0.04 of travel each side): from
+    # centre, the twist's travel first leaves the dead zone, then the rest is stretched to the end.
+    raw = 0.5 + 0.5 / (150 * 3.14159265 / 180)
+    expect = 50 + (raw - 0.54) * 0.5 / 0.46 * 100 if v0 == 50 else v0 + (raw - 0.5) * 100
+    check(abs(v1 - expect) <= 1.5, f"twisting the pinched hand turns the knob ({v0} -> {v1}, expected {expect:.0f})")
     hand(hx - 40, hy + 30, False, 0.5)
     pg.evaluate("() => window.__handoff.gestures.lost('hand-e2e')")
     pad = pg.locator(".deck-a .pad-row").nth(2).locator(".pad").last          # Loop 8

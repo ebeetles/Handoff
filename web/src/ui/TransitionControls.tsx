@@ -74,6 +74,7 @@ export function TransitionControls() {
         <button className="text-button" disabled={busy || !o.loaded || !i.loaded || i.playing || o.trackId === i.trackId}
                 onClick={() => setComposerOpen(true)}>Compose with AI</button>
       </div>
+      <div className="transition-meta">
       <div className={`transition-status ${st.state}`} role="status">{line}</div>
       {cand?.recipe?.anchor && <details className="transition-details">
         <summary>{cand.source === "llm" ? "AI" : "Rules"} · A/out bar {cand.recipe.anchor.out_start_bar + 1} → B/in bar {cand.recipe.anchor.in_from_bar + 1} · {cand.recipe.bars} bars</summary>
@@ -81,6 +82,7 @@ export function TransitionControls() {
         <p>{cand.plan.moves.map((m) => String(m.move).replaceAll("_", " ")).join(" → ")}</p>
         <p>{cand.critic?.reasons.join(" ")}</p>
       </details>}
+      </div>
       {composerOpen && <ComposerPanel key={`${o.trackId}:${i.trackId}`} out={o} inn={i} outDeck={oId} inDeck={iId}
         onClose={() => setComposerOpen(false)} onPick={setPicked} />}
     </div>

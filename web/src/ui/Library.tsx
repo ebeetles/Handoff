@@ -22,7 +22,10 @@ export function Library({ onClose, base }: { onClose: () => void; base: string }
     <>
       <div className="library-scrim" onClick={onClose} />
       <div className="library" role="dialog" aria-label="Track library">
-        <h2>Library</h2>
+        <div className="library-head">
+          <h2>Library</h2>
+          <button className="text-button" onClick={onClose}>Close</button>
+        </div>
         {err || (tracks && tracks.length === 0) ? (
           <p>
             No tracks yet. From <code>pipeline/</code>, run <code>python make_demo_tracks.py --out tracks</code> for two demo
@@ -37,8 +40,8 @@ export function Library({ onClose, base }: { onClose: () => void; base: string }
               <div className="lib-title">{t.title}</div>
               <div className="lib-sub">{[t.artist, t.has_stems && "parts available", !t.beatmatchable && "tempo drifts"].filter(Boolean).join(", ")}</div>
             </div>
-            <div className="lib-stat">{t.bpm.toFixed(1)}<div className="lib-sub">BPM</div></div>
-            <div className="lib-stat">{t.camelot}<div className="lib-sub">Key</div></div>
+            <div className="lib-stat"><span className="lib-num">{t.bpm.toFixed(1)}</span><span className="lib-unit">BPM</span></div>
+            <div className="lib-stat"><span className="lib-num">{t.camelot}</span><span className="lib-unit">Key</span></div>
             <div className="lib-load">
               <button className="a" onClick={() => load("A", t.id)}>Load to A</button>
               <button className="b" onClick={() => load("B", t.id)}>Load to B</button>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { AudioEngine } from "../audio/engine";
 import { CommandBus } from "../control/commands";
 import { ControlStore } from "../control/controls";
@@ -57,29 +57,39 @@ function Booth() {
   const snap = useSnapshots();
   const [libOpen, setLibOpen] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
+  const appRef = useRef<HTMLDivElement>(null);
+  const fit = useFitToWindow();
 
   useEffect(() => {
     const resume = () => engine.resume();
-    const detachPointer = attachPointerAdapter(boardRef.current!, gestures, resume);
+    // The whole app listens, so the top bar's chips and Master knob work too; a press belongs
+    // to the board only on the board itself or on a control (other buttons stay native).
+    const detachPointer = attachPointerAdapter(appRef.current!, gestures, resume,
+      (t) => (t instanceof Node && boardRef.current!.contains(t)) || gestures.isTarget(t));
     const detachKeys = attachKeyboard(bus.dispatch, store, resume);
     return () => { detachPointer(); detachKeys(); };
   }, [engine, gestures, store, bus]);
 
   return (
-    <div className="app">
+    <div className="app" ref={appRef}>
+      <div className="stage" style={fit}>
       <header className="topbar">
-        <div className="wordmark">Handoff<span>DJ board</span></div>
+        <div className="wordmark"><span className="logo" aria-hidden /> Handoff<span className="wordmark-sub">DJ board</span></div>
         <div className="topbar-center">
           <TransitionControls />
           <div className="notice" role="status">{snap.notice}</div>
         </div>
         <div className="topbar-right">
-          <ToggleChip id="quantize" label="Snap to beat" />
-          <ToggleChip id="keyLock" label={keyStatus === "unavailable" ? "Key lock (unavailable)" : "Key lock"} status={keyStatus}
-            title="Tempo changes keep each deck's key; the − / + under a deck's key shift it by semitones. Adds 80 ms of latency." />
+          <div className="topbar-group" role="group" aria-label="Settings">
+            <ToggleChip id="quantize" label="Snap to beat" />
+            <ToggleChip id="keyLock" label={keyStatus === "unavailable" ? "Key lock (unavailable)" : "Key lock"} status={keyStatus}
+              title="Tempo changes keep each deck's key; the − / + by a deck's key shift it by semitones. Adds 80 ms of latency." />
+          </div>
           <Knob id="master" label="Master" size={40} />
-          <CameraToggle />
-          <button className="text-button" onClick={() => { engine.resume(); setLibOpen(true); }}>Library</button>
+          <div className="topbar-group">
+            <CameraToggle />
+            <button className="text-button" onClick={() => { engine.resume(); setLibOpen(true); }}>Library</button>
+          </div>
         </div>
       </header>
       <div className="waves">
@@ -91,9 +101,28 @@ function Booth() {
         <Mixer a={snap.A} b={snap.B} />
         <DeckPanel deck="B" s={snap.B} />
       </div>
+      </div>
       <HandCursors />
       <CameraPanel />
       {libOpen && <Library base={LIBRARY_BASE} onClose={() => setLibOpen(false)} />}
     </div>
   );
+}
+
+/** Below this size the board is scaled down as a whole instead of re-flowed, so every control
+ *  keeps its place (hands learn where things are). 1280 x 800 is the smallest size the layout
+ *  fits at (compact mode below 860 px tall). Hit-testing uses on-screen rects, so a transform
+ *  is invisible to the mouse and the hands. */
+const FIT = { width: 1280, height: 800 };
+
+function useFitToWindow(): CSSProperties | undefined {
+  const measure = () => Math.min(1, window.innerWidth / FIT.width, window.innerHeight / FIT.height);
+  const [scale, setScale] = useState(measure);
+  useEffect(() => {
+    const onResize = () => setScale(measure());
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  if (scale >= 1) return undefined;
+  return { width: `${100 / scale}vw`, height: `${100 / scale}vh`, transform: `scale(${scale})`, transformOrigin: "0 0" };
 }

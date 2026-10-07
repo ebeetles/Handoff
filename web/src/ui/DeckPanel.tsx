@@ -23,7 +23,7 @@ export function DeckPanel({ deck, s }: { deck: DeckId; s: DeckSnapshot }) {
     ? `${s.sectionLabel ? s.sectionLabel[0]!.toUpperCase() + s.sectionLabel.slice(1) + " section, " : ""}phrase ${s.phraseIndex + 1} of ${s.phraseCount}${s.beatmatchable ? "" : ". Tempo drifts, so sync may slip."}`
     : "Empty. Open the library to load a track.");
   return (
-    <section className={`panel deck deck-${deck.toLowerCase()}`} aria-label={`Deck ${deck}`}>
+    <section className={`panel deck deck-${deck.toLowerCase()}${off ? " empty" : ""}`} aria-label={`Deck ${deck}`}>
       <Overview deck={deck} />
       <div className="deck-top">
         <PhraseRing s={s} />
@@ -34,16 +34,20 @@ export function DeckPanel({ deck, s }: { deck: DeckId; s: DeckSnapshot }) {
             <div className="readout-big">{s.loaded ? s.bpm.toFixed(1) : "–"}</div>
             <div className="readout key-readout">
               <small>Key{s.loaded && Math.abs(s.pitchSemitones) >= 0.05 ? ` ${s.pitchSemitones > 0 ? "+" : ""}${Number.isInteger(s.pitchSemitones) ? s.pitchSemitones : s.pitchSemitones.toFixed(1)}` : ""}</small>
-              {s.loaded ? (s.heardCamelot !== s.camelot ? `${s.camelot}→${s.heardCamelot}` : s.camelot) : "–"}
-              <span className="key-shift">
-                <Pad small command={{ type: "keyShift", deck, semitones: -1 }} disabled={off}>−</Pad>
-                <Pad small command={{ type: "keyShift", deck, semitones: 1 }} disabled={off}>+</Pad>
-              </span>
+              <div className="key-line">
+                <span className={s.heardCamelot !== s.camelot ? "key-value shifted" : "key-value"}>
+                  {s.loaded ? (s.heardCamelot !== s.camelot ? `${s.camelot}→${s.heardCamelot}` : s.camelot) : "–"}
+                </span>
+                <span className="key-shift" aria-label="Key shift">
+                  <Pad small command={{ type: "keyShift", deck, semitones: -1 }} disabled={off}>−</Pad>
+                  <Pad small command={{ type: "keyShift", deck, semitones: 1 }} disabled={off}>+</Pad>
+                </span>
+              </div>
             </div>
             <div className="readout"><small>Tempo</small>{s.loaded ? `${((s.rate - 1) * 100).toFixed(1)}%` : "–"}</div>
             <div className="readout"><small>Left</small>{s.loaded ? fmtTime(Math.max(0, s.duration - s.position)) : "–"}</div>
           </div>
-          <div className={`status-line ${s.error ? "error" : ""}`}>{status}</div>
+          <div className={`status-line ${s.error ? "error" : ""}`}><span>{status}</span></div>
         </div>
       </div>
       <div className="deck-controls">
@@ -60,19 +64,19 @@ export function DeckPanel({ deck, s }: { deck: DeckId; s: DeckSnapshot }) {
               <StemTile key={st} id={`${deck}.stem.${st}`} label={STEM_LABEL[st]!} disabled={!s.hasStems} />
             ))}
           </div>
-          <div className="pad-group-label">Loop (beats)</div>
+          <div className="pad-group-label">Loop <span>beats</span></div>
           <div className="pad-row" style={{ "--cols": 4 } as CSSProperties}>
             {[1, 2, 4, 8].map((b) => (
               <Pad key={b} small command={{ type: "loop", deck, beats: b }} active={s.loop?.beats === b} disabled={off}>{b}</Pad>
             ))}
           </div>
-          <div className="pad-group-label">Roll (beats; slips back in time when you let go)</div>
+          <div className="pad-group-label">Roll <span>beats · slips back in time when you let go</span></div>
           <div className="pad-row" style={{ "--cols": 4 } as CSSProperties}>
             {ROLLS.map((b) => (
               <Pad key={b} small command={{ type: "loop", deck, beats: b }} active={s.loop?.beats === b} disabled={off}>1/{1 / b}</Pad>
             ))}
           </div>
-          <div className="pad-group-label">Cue and jump (beats)</div>
+          <div className="pad-group-label">Cue &amp; jump <span>beats</span></div>
           <div className="pad-row cue-row" style={{ "--cols": 5 } as CSSProperties}>
             <Pad small command={{ type: "cue", deck }} disabled={off}>Cue</Pad>
             {[-16, -4, 4, 16].map((b) => (
@@ -81,7 +85,7 @@ export function DeckPanel({ deck, s }: { deck: DeckId; s: DeckSnapshot }) {
           </div>
         </div>
         <div className="tempo-col">
-          <Fader id={`${deck}.tempo`} label="Tempo" readout={(v) => `${((v - 0.5) * 2 * TEMPO_RANGE * 100 >= 0 ? "+" : "")}${((v - 0.5) * 2 * TEMPO_RANGE * 100).toFixed(1)}%`} />
+          <Fader id={`${deck}.tempo`} label="Tempo" detent={0.5} readout={(v) => `${((v - 0.5) * 2 * TEMPO_RANGE * 100 >= 0 ? "+" : "")}${((v - 0.5) * 2 * TEMPO_RANGE * 100).toFixed(1)}%`} />
         </div>
       </div>
     </section>
