@@ -230,10 +230,27 @@ Good to know:
 
 ## Troubleshooting
 
+**Can't get past the access code?** Check these in order:
+1. **Is the backend running?** Open `https://<handoff-api URL>/api/health` in a tab. It should
+   show `{"ok": true, "hosted": true, "origins": [...]}`. If it doesn't, look at
+   **handoff-api → Events / Logs** for a failed deploy or a startup error.
+2. **Does the backend accept the board's address?** Copy the board's address from the browser's
+   address bar: `https://` plus the host, no path, no trailing slash. It must appear **exactly**
+   in the `origins` list from step 1. If not, set `ALLOWED_ORIGINS` on handoff-api to it. The
+   usual cause is Render adding a suffix to the name.
+3. **Is the board calling the right backend?** `VITE_API_URL` on handoff-web must be exactly the
+   handoff-api URL (https, no trailing slash). After changing it, use **Manual Deploy**: the
+   board only picks it up when it's rebuilt.
+
+Your browser's console (F12 → Console) names the problem too: *blocked by CORS policy* means
+step 2, *ERR_NAME_NOT_RESOLVED* means step 3, *Mixed Content* means `VITE_API_URL` starts with
+`http://` instead of `https://`.
+
 | What you see | Likely cause | Fix |
 |---|---|---|
 | The board opens with no code prompt | `VITE_API_URL` wasn't set when handoff-web was built | Set it (2c), then Manual Deploy |
-| Stuck on "Starting the server…" for over 2 minutes | handoff-api isn't running | Check its **Logs** and the `/api/health` URL |
+| "The server is up but doesn't accept this page's address" | `ALLOWED_ORIGINS` doesn't match the board's URL | Set it to the address the message shows |
+| "Couldn't reach the server at …" after 2–3 minutes | handoff-api isn't running, or `VITE_API_URL` is wrong | Open the `/api/health` URL the message names; check handoff-api's **Logs** |
 | "That code didn't work" | Typo, or a space in `ACCESS_CODE` | Compare with handoff-api → Environment |
 | "Couldn't reach the library (4xx/5xx)" | Wrong `R2_*` values or bucket name | Fix them in handoff-api → Environment |
 | Library opens but tracks never load; console says *blocked by CORS policy* | The bucket's CORS rule doesn't name the board's exact URL | Redo step 3 with the exact URL (https, no trailing slash) |

@@ -60,7 +60,9 @@ def test_hosting_needs_a_code_and_complete_r2_settings():
 
 def test_every_call_but_health_needs_the_code(tmp_path):
     client, _, _ = hosted(tmp_path)
-    assert client.get("/api/health").json() == {"ok": True, "hosted": True}
+    health = client.get("/api/health", headers={"Origin": "https://handoff-web-abc1.onrender.com"})
+    assert health.json() == {"ok": True, "hosted": True, "origins": [BOARD]}
+    assert health.headers["access-control-allow-origin"] == "*"          # readable even from a wrong address
     assert client.get("/api/session").status_code == 401
     assert client.get("/api/session", headers={"X-Access-Code": "nope"}).status_code == 401
     assert client.get("/api/session", headers={"X-Access-Code": "open-sesame"}).json()["ok"] is True

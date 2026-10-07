@@ -692,3 +692,4 @@ Cut order if time runs out: voice, then guided mode, then live re-ranking (use o
     - `e2e/hosted.py`: upload, gate, signed audio, playback, reload, and one real composition kept across a reload;
     - both production builds: gate with `VITE_API_URL`, none without, no secrets in `dist`.
   - **Not verified:** Render and R2 themselves (no account access here); in particular whether Render's proxy allows a 1–3 minute composition request.
+- **2026-10-07** The access gate names its failure. A CORS refusal (board address not in `ALLOWED_ORIGINS`) reaches fetch as a network error, and the gate reported it as "The server didn't start" after 2.5 minutes. `/api/health` is now readable from any origin and lists the accepted origins, so the gate says at once which address to allow; only an unreachable server is waited on. Reproduced against the real start command with a mismatched origin: preflight 400. The improved gate names it within 0.1 s.

@@ -20,6 +20,7 @@ from typing import Literal
 import jsonschema
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -71,8 +72,11 @@ def create_app(library: Path = ROOT / "web/public/library", composer: Composer |
             raise HTTPException(401, "Wrong or missing access code")
 
     @api.get("/api/health")
-    def health() -> dict:
-        return {"ok": True, "hosted": settings.hosted}
+    def health() -> JSONResponse:
+        # Public and readable from any page (nothing secret in it), so a board whose address isn't
+        # in ALLOWED_ORIGINS can still tell "server up, address refused" from "server down".
+        return JSONResponse({"ok": True, "hosted": settings.hosted, "origins": list(settings.allowed_origins)},
+                            headers={"Access-Control-Allow-Origin": "*"})
 
     @api.get("/api/session")
     def session(request: Request) -> dict:
