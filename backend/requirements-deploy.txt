@@ -1,0 +1,10 @@
+# What the hosted backend needs (Render): the composer and the signed library links. The audio
+# analysis stack (librosa, soundfile, Demucs) isn't needed: the composer reads analysis.json only.
+# Versions as tested locally (2026-10-07).
+fastapi>=0.142,<1
+uvicorn>=0.54,<1
+pydantic>=2.13,<3
+anthropic>=1.11,<2
+numpy>=2.5,<3
+jsonschema>=4.26,<5
+boto3>=1.43,<2

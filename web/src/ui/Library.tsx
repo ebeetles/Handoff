@@ -4,17 +4,18 @@ import type { DeckId } from "../control/controls";
 import { SHORTCUTS } from "../input/keyboard";
 import { useServices } from "./context";
 
-export function Library({ onClose, base }: { onClose: () => void; base: string }) {
-  const { bus } = useServices();
+export function Library({ onClose }: { onClose: () => void }) {
+  const { bus, engine } = useServices();
   const [tracks, setTracks] = useState<LibraryIndexEntry[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${base}/index.json`)
+    engine.library.url("index.json")
+      .then((u) => fetch(u))
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`index.json not found (${r.status})`))))
       .then((idx: LibraryIndex) => setTracks(idx.tracks))
       .catch((e: Error) => setErr(e.message));
-  }, [base]);
+  }, [engine]);
 
   const load = (deck: DeckId, id: string) => { bus.dispatch({ type: "load", deck, trackId: id }); onClose(); };
 
@@ -39,6 +40,9 @@ export function Library({ onClose, base }: { onClose: () => void; base: string }
             <div>
               <div className="lib-title">{t.title}</div>
               <div className="lib-sub">{[t.artist, t.has_stems && "parts available", !t.beatmatchable && "tempo drifts"].filter(Boolean).join(", ")}</div>
+              {(t.license || t.credit) && <div className="lib-credit">
+                {t.license}{sourceUrl(t.credit) && <> · <a href={sourceUrl(t.credit)!} target="_blank" rel="noreferrer">source</a></>}
+              </div>}
             </div>
             <div className="lib-stat"><span className="lib-num">{t.bpm.toFixed(1)}</span><span className="lib-unit">BPM</span></div>
             <div className="lib-stat"><span className="lib-num">{t.camelot}</span><span className="lib-unit">Key</span></div>
@@ -54,4 +58,10 @@ export function Library({ onClose, base }: { onClose: () => void; base: string }
       </div>
     </>
   );
+}
+
+/** The link in a credit ("Artist — https://audius.co/..."), if there is one. */
+function sourceUrl(credit: string | null | undefined): string | null {
+  const m = credit ? /https?:\/\/\S+/.exec(credit) : null;
+  return m ? m[0] : null;
 }

@@ -1,25 +1,46 @@
 // The composed transitions for this library (library/transitions.json), if the planner has run.
 import { assertTransitions, type Candidate, type Transitions } from "../contracts/transitions";
+import type { LibrarySource } from "../hosting";
 
 export class TransitionLibrary {
   private data: Transitions | null = null;
   private listeners = new Set<() => void>();
   error: string | null = null;
 
-  constructor(private readonly base: string) {}
+  /** persistKey: keep compositions made here in this browser too (hosted: the server can't keep them). */
+  constructor(private readonly library: LibrarySource, private readonly persistKey: string | null = null) {}
 
   async load(): Promise<void> {
     try {
-      const r = await fetch(`${this.base}/transitions.json`);
-      // Vite's dev server answers a missing file with index.html: treat that as "not planned yet".
-      if (!r.ok || (r.headers.get("content-type") ?? "").includes("text/html")) return;
-      const t: unknown = await r.json();
-      assertTransitions(t);
-      this.data = t;
+      const r = await fetch(await this.library.url("transitions.json"));
+      // Vite's dev server answers a missing file with index.html: treat that as "not planned yet"
+      // (compositions kept in this browser still load below).
+      if (r.ok && !(r.headers.get("content-type") ?? "").includes("text/html")) {
+        const t: unknown = await r.json();
+        assertTransitions(t);
+        this.data = t;
+      }
     } catch (e) {
       this.error = e instanceof Error ? e.message : String(e);
     }
+    for (const doc of this.saved()) {
+      try { this.merge(doc, false); } catch { /* from an older version: skip it */ }
+    }
     this.listeners.forEach((fn) => fn());
+  }
+
+  /** Compositions kept in this browser (newest last). */
+  private saved(): unknown[] {
+    if (!this.persistKey) return [];
+    try {
+      const v: unknown = JSON.parse(localStorage.getItem(this.persistKey) ?? "[]");
+      return Array.isArray(v) ? v : [];
+    } catch { return []; }
+  }
+
+  private keep(doc: Transitions): void {
+    if (!this.persistKey) return;
+    try { localStorage.setItem(this.persistKey, JSON.stringify([...this.saved(), doc].slice(-50))); } catch { /* storage full or blocked */ }
   }
 
   subscribe(fn: () => void): () => void {
@@ -28,8 +49,9 @@ export class TransitionLibrary {
   }
 
   /** Incorporate an on-demand response while preserving other exits and track pairs. */
-  merge(data: Transitions): void {
+  merge(data: unknown, persist = true): void {
     assertTransitions(data);
+    if (persist) this.keep(data);
     const pairs = new Map((this.data?.pairs ?? []).map((p) => [`${p.out_track}:${p.in_track}`, p]));
     for (const p of data.pairs) {
       const key = `${p.out_track}:${p.in_track}`;

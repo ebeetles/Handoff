@@ -1,15 +1,17 @@
 import type { ComposeRequest } from "../contracts/composer";
+import { apiFetch, HOSTED } from "../hosting";
 import { assertTransitions, type Transitions } from "../contracts/transitions";
 
 export async function composeLive(request: ComposeRequest, signal?: AbortSignal): Promise<Transitions> {
   let response: Response;
   try {
-    response = await fetch("/api/composer/compose", {
+    response = await apiFetch("/api/composer/compose", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request), signal,
     });
   } catch (e) {
     if (signal?.aborted) throw e;
-    throw new Error("Can't reach the composer. Start the local composer server and try again.");
+    throw new Error(HOSTED ? "Can't reach the composer server. Check your connection and try again."
+      : "Can't reach the composer. Start the local composer server and try again.");
   }
   if (!response.headers.get("content-type")?.includes("application/json")) {
     throw new Error("Composer is unavailable. Start the local composer server and try again.");

@@ -30,6 +30,7 @@ python web/e2e/composer.py                  # Compose with AI panel + a mid-trac
 python web/e2e/ride_brake.py                # tempo ride, entry at B's own tempo, brake (canned reply, free)
 python web/e2e/hook_loop.py                 # a held loop of A's hook: bar clock runs on, lands back in time (canned reply, free)
 python web/e2e/key_lock.py                  # key lock and key shift, measured as pitch in the deck's output
+python web/e2e/hosted.py                    # the hosted setup with a local S3 standing in for R2 (starts its own servers; --compose spends one call)
 # Opt-in, costs one Claude call: python web/e2e/composer_live.py "With My Crew" "EvenFall" 32 --yes-spend
 ```
 

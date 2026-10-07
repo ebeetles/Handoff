@@ -1,3 +1,4 @@
+import { localLibrary } from "../hosting";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import fixture from "../../../contracts/fixtures/sample_transitions.json";
 import type { ComposeRequest } from "../contracts/composer";
@@ -31,7 +32,7 @@ describe("live composer", () => {
   });
   it("merges new exits without duplicating candidates or losing prior plans", () => {
     assertTransitions(fixture);
-    const lib = new TransitionLibrary("library");
+    const lib = new TransitionLibrary(localLibrary("library"));
     lib.merge(fixture);
     const count = lib.composedFor(pair.out_track, pair.in_track).length;
     const second = structuredClone(fixture);
@@ -47,5 +48,21 @@ describe("live composer", () => {
     invalid.pairs[0]!.best = 0;
     invalid.pairs[0]!.candidates[0]!.recipe!.anchor.out_track = "wrong";
     expect(() => assertTransitions(invalid)).toThrow(/anchor/);
+  });
+  it("hosted: compositions made here survive a reload (kept in this browser)", async () => {
+    const mem = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("not found", { status: 404 })));
+    assertTransitions(fixture);
+    const first = new TransitionLibrary(localLibrary("library"), "handoff.compositions");
+    first.merge(fixture);
+    const again = new TransitionLibrary(localLibrary("library"), "handoff.compositions");
+    await again.load();
+    expect(again.composedFor(pair.out_track, pair.in_track).length).toBeGreaterThan(0);
+    mem.set("handoff.compositions", JSON.stringify([{ schema_version: 1, pairs: [] }]));   // from an older version
+    const old = new TransitionLibrary(localLibrary("library"), "handoff.compositions");
+    await old.load();
+    expect(old.composedFor(pair.out_track, pair.in_track)).toEqual([]);
+    vi.unstubAllGlobals();
   });
 });

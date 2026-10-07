@@ -7,7 +7,7 @@ import { useServices } from "./context";
 export function ComposerPanel({ out, inn, outDeck, inDeck, onClose, onPick }: {
   out: DeckSnapshot; inn: DeckSnapshot; outDeck: "A" | "B"; inDeck: "A" | "B"; onClose: () => void; onPick: (id: string) => void;
 }) {
-  const { transitions } = useServices();
+  const { transitions, engine } = useServices();
   const dialog = useRef<HTMLDialogElement>(null);
   const abort = useRef<AbortController | null>(null);
   const [track, setTrack] = useState<TrackAnalysis | null>(null);
@@ -24,7 +24,7 @@ export function ComposerPanel({ out, inn, outDeck, inDeck, onClose, onPick }: {
     const controller = new AbortController();
     void (async () => {
       try {
-        const r = await fetch(`${import.meta.env.BASE_URL}library/${encodeURIComponent(out.trackId)}/analysis.json`, { signal: controller.signal });
+        const r = await fetch(await engine.library.url(`${encodeURIComponent(out.trackId)}/analysis.json`), { signal: controller.signal });
         if (!r.ok) throw new Error("Couldn't load this track's phrase map");
         const data: unknown = await r.json();
         assertTrackAnalysis(data);

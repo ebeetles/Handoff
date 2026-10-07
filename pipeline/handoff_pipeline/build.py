@@ -161,6 +161,8 @@ def write_index(out_root: Path) -> list[dict]:
             "bpm": a["tempo"]["bpm"], "camelot": a["key"]["camelot"],
             "duration_s": a["duration_s"], "has_stems": a["audio"]["stems"] is not None,
             "beatmatchable": a["tempo"]["beatmatchable"],
+            # For credits in the board (CC licences require attribution).
+            "license": a["source"].get("license"), "credit": a["source"].get("credit"),
         })
     (out_root / "index.json").write_text(json.dumps({"schema_version": 1, "tracks": tracks}, indent=1))
     return tracks

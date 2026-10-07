@@ -52,6 +52,8 @@ export interface Waveform { schema_version: 1; points_per_second: number; low: n
 export interface LibraryIndexEntry {
   id: string; title: string; artist: string; bpm: number; camelot: string;
   duration_s: number; has_stems: boolean; beatmatchable: boolean;
+  /** Optional (added 2026-10-07): the track's licence and credit ("Artist — URL"), shown in the library. */
+  license?: string | null; credit?: string | null;
 }
 export interface LibraryIndex { schema_version: 1; tracks: LibraryIndexEntry[] }
 

@@ -74,7 +74,7 @@ To change a contract: bump its version, update writer and reader in the same cha
 | 5 Hand input | v0.1 built and tested on synthetic hands; real-camera definition-of-done checks pending |
 | 6 Transition recipes + automation | v0.1 done: 5 recipes, automation player, echo; definition of done met in the browser test (by ear: pending) |
 | 7 Composed transitions (AI composer + critic) | Done: offline planner + live composer, verified live; Jev re-ranking not started |
-| 8 Backend | Started: local composer endpoint only (`backend/app.py`) |
+| 8 Backend | Started: composer endpoint; private hosted mode (access code, signed R2 links, rate limit; docs/DEPLOY.md) |
 | 9 Live co-DJ + guided mode | Not started |
 | 10 LLM voice | Not started |
 | 11 Evaluation, writeup, deploy | Not started |
@@ -679,3 +679,16 @@ Cut order if time runs out: voice, then guided mode, then live re-ranking (use o
   - **Top-bar controls work with the mouse.** The mouse adapter was attached to the board only, so Snap to beat, Key lock and Master never got pointer events (hands, which hit-test globally, could reach them). It now listens on the whole app but claims a press only on the board or a registered control (`GestureController.isTarget`), leaving native buttons and the picker to the browser. Presses it doesn't claim are ignored until released (before, a press outside the board could grab a pad when dragged onto it).
   - **Detents:** knobs click into their default (EQ and filter at centre, Master at 0.8), and tempo faders into 0 %. The drag/twist works in "raw" travel space: a dead zone of ±`DETENT` (0.04 of travel, ~6 px or ~6°) holds the value exactly at the default; the rest is stretched so the ends are still reached and nothing jumps. A tick on each knob's ring marks the default and lights when the knob sits on it. Contract C4: `TargetSpec.continuous.detent` (optional, non-breaking). Volume and crossfader are free, as on a mixer.
   - **Small windows:** below 1280×800 the board (top bar, waveforms, decks, mixer) scales as one piece with a transform instead of re-flowing (the 1100 px single-column stack is gone), so controls keep their places for hands. Overlays (hand cursors, camera panel, library) stay outside the scaled stage, and hit-testing uses on-screen rects. Checked at 1440×900, 1100×900, 1000×700, 800×600 and 1600×600: all controls on screen, no overlaps, no scrolling, and mouse drags, pads and the detent work at scale. The compose button is sticky, so it stays in reach in a short window.
+- **2026-10-07** Hosting (private, for course staff), see docs/DEPLOY.md:
+  - **Layout:** board as a free Render static site; backend as a free Render web service; music in a private R2 bucket.
+  - **Signed links:** visitors enter an access code. The backend checks it on every call and hands out signed links (R2 presigned GET, 6 h) for library paths only (`LIBRARY_PATH` allow-list). No audio is public.
+  - **Startup guards:** the backend refuses to start hosted without `ACCESS_CODE`, or with half the R2 settings.
+  - **Composer:** CORS and the origin guard allow only `ALLOWED_ORIGINS`. Composing is rate-limited per code+IP (`COMPOSE_PER_HOUR`, 10). Hosted, the backend writes nothing to the library; the browser keeps compositions (localStorage). Free Render has no disk.
+  - **Board:** the library is behind a `LibrarySource` (local path, or batched signed links). The access gate waits out the free server's wake-up (~1 min).
+  - **Licensing:** the two unofficial major-label edits were removed (33 tracks). The library shows each track's licence and source link (CC attribution).
+  - **Deploy deps:** a slim `backend/requirements-deploy.txt`; the server never loads the analysis stack (~65 MB at start).
+  - **Verified locally**, with moto standing in for R2:
+    - `pytest tests/test_hosting.py`: code, path allow-list, CORS, origin, rate limit, read-only library, real presigning;
+    - `e2e/hosted.py`: upload, gate, signed audio, playback, reload, and one real composition kept across a reload;
+    - both production builds: gate with `VITE_API_URL`, none without, no secrets in `dist`.
+  - **Not verified:** Render and R2 themselves (no account access here); in particular whether Render's proxy allows a 1–3 minute composition request.

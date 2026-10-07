@@ -1,6 +1,7 @@
 // AudioEngine: owns the AudioContext, both decks, and the master bus. It is the only
 // thing that listens to ControlStore/CommandBus and touches Web Audio. UI reads state
 // through snapshot(); it never pokes decks directly.
+import { localLibrary, type LibrarySource } from "../hosting";
 import { assertTrackAnalysis, STEM_NAMES, type StemName, type TrackAnalysis, type Waveform } from "../contracts/track";
 import type { Command } from "../control/commands";
 import { CommandBus } from "../control/commands";
@@ -63,7 +64,7 @@ export class AudioEngine {
   /** Exact-time steps applied for automation (newest last, capped): for tests and debugging. */
   readonly automationLog: { control: ControlId; value: number; at: number }[] = [];
 
-  constructor(readonly store: ControlStore, readonly bus: CommandBus, readonly libraryBase = "library") {
+  constructor(readonly store: ControlStore, readonly bus: CommandBus, readonly library: LibrarySource = localLibrary("library")) {
     // 44.1 kHz context matches the served files: no resampling on decode, and less memory
     // than a 48 kHz context would use for the same stems.
     let ctx: AudioContext;
@@ -377,18 +378,21 @@ export class AudioEngine {
     deck.loading = "Reading analysis";
     deck.error = null;
     try {
-      const base = `${this.libraryBase}/${trackId}`;
-      const analysis = await fetchJson<TrackAnalysis>(`${base}/analysis.json`);
+      const at = (path: string) => this.library.url(`${trackId}/${path}`);
+      const analysis = await fetchJson<TrackAnalysis>(await at("analysis.json"));
       assertTrackAnalysis(analysis);
-      const waveform = await fetchJson<Waveform>(`${base}/${analysis.waveform}`);
       const stems = analysis.audio.stems;
       const keys: SourceKey[] = stems ? [...STEM_NAMES] : ["mix"];
+      // Ask for every file at once (hosted: one batch of signed links, downloads in parallel),
+      // then decode one at a time.
+      const [waveform, ...audio] = await Promise.all([
+        at(analysis.waveform).then((u) => fetchJson<Waveform>(u)),
+        ...keys.map((key) => at(key === "mix" ? analysis.audio.mix : stems![key]).then((u) => okFetch(u)).then((r) => r.arrayBuffer())),
+      ]);
       const buffers = new Map<SourceKey, AudioBuffer>();
       for (const [i, key] of keys.entries()) {
         deck.loading = keys.length > 1 ? `Decoding ${key} (${i + 1}/${keys.length})` : "Decoding audio";
-        const path = key === "mix" ? analysis.audio.mix : stems![key];
-        const bytes = await (await okFetch(`${base}/${path}`)).arrayBuffer();
-        buffers.set(key, await this.ctx.decodeAudioData(bytes));
+        buffers.set(key, await this.ctx.decodeAudioData(audio[i]!));
       }
       const lens = [...buffers.values()].map((b) => b.duration);
       if (Math.max(...lens) - Math.min(...lens) > 0.01) console.warn(`Deck ${d}: stem lengths differ`, lens);

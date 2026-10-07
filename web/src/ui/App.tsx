@@ -17,8 +17,11 @@ import { Library } from "./Library";
 import { TransitionControls } from "./TransitionControls";
 import { Mixer } from "./Mixer";
 import { Waveform } from "./Waveform";
+import { AccessGate } from "./AccessGate";
+import { HOSTED, hostedLibrary, localLibrary } from "../hosting";
 
-const LIBRARY_BASE = `${import.meta.env.BASE_URL}library`;
+// Local: files under public/library. Hosted: signed links from the backend (hosting.ts).
+const LIBRARY = HOSTED ? hostedLibrary() : localLibrary(`${import.meta.env.BASE_URL}library`);
 const HAND_MODEL_URL = `${import.meta.env.BASE_URL}models/hand_landmarker.task`;
 
 // Module-level singleton, NOT useMemo: StrictMode double-invokes memo callbacks in dev,
@@ -28,11 +31,12 @@ function getServices(): Services {
   if (!services) {
     const store = new ControlStore();
     const bus = new CommandBus();
-    const engine = new AudioEngine(store, bus, LIBRARY_BASE);
+    const engine = new AudioEngine(store, bus, LIBRARY);
     const gestures = new GestureController(store, bus.dispatch);
     const hands = new HandAdapter(gestures, HAND_MODEL_URL);
     const coDJ = new AutomationPlayer(engine, store, bus.dispatch);
-    const transitions = new TransitionLibrary(LIBRARY_BASE);
+    // Hosted, the server keeps no compositions: keep them in this browser.
+    const transitions = new TransitionLibrary(LIBRARY, HOSTED ? "handoff.compositions" : null);
     void transitions.load();
     services = { store, bus, engine, gestures, hands, coDJ, transitions };
     // Dev-only debug handle for browser tests and poking at state from the console.
@@ -42,7 +46,11 @@ function getServices(): Services {
 }
 
 export function App() {
-  const services = getServices();
+  return <AccessGate><Board /></AccessGate>;
+}
+
+function Board() {
+  const services = getServices();   // created only once the access gate (hosted) lets us in
   return (
     <ServicesContext.Provider value={services}>
       <Booth />
@@ -104,7 +112,7 @@ function Booth() {
       </div>
       <HandCursors />
       <CameraPanel />
-      {libOpen && <Library base={LIBRARY_BASE} onClose={() => setLibOpen(false)} />}
+      {libOpen && <Library onClose={() => setLibOpen(false)} />}
     </div>
   );
 }

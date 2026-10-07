@@ -66,3 +66,7 @@ cd pipeline && python -m pytest -q
 cd web && npm run typecheck && npm test
 python web/e2e/smoke.py      # with `npm run dev` running; needs: pip install playwright && python -m playwright install chromium
 ```
+
+## Putting it online
+
+See [docs/DEPLOY.md](docs/DEPLOY.md): a private, access-code deployment on Render (free) with the music in a private Cloudflare R2 bucket.

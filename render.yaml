@@ -1,0 +1,51 @@
+# Render Blueprint for a private, access-code deployment of Handoff (see docs/DEPLOY.md).
+#   handoff-api: the backend (access code, signed links to the library in R2, the AI composer)
+#   handoff-web: the board (static site)
+# Values marked sync: false are secrets or URLs you enter in the Render dashboard.
+services:
+  - name: handoff-api
+    type: web
+    runtime: python
+    plan: free
+    rootDir: .
+    buildCommand: pip install -r backend/requirements-deploy.txt
+    startCommand: uvicorn backend.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.11"
+      - key: ACCESS_CODE
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS        # the board's URL, e.g. https://handoff-web.onrender.com
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: COMPOSE_PER_HOUR
+        value: "10"
+
+  - name: handoff-web
+    type: web
+    runtime: static
+    rootDir: web
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: NODE_VERSION
+        value: "22.22.3"
+      - key: VITE_API_URL           # the backend's URL, e.g. https://handoff-api.onrender.com
+        sync: false
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(self), microphone=()
