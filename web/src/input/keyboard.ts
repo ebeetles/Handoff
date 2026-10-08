@@ -8,6 +8,7 @@ export const SHORTCUTS: { keys: string; does: string }[] = [
   { keys: "S / L", does: "Sync deck A / B to the other deck" },
   { keys: "1-4 / 7-0", does: "Loop 1, 2, 4, 8 beats on A / B" },
   { keys: "← / →", does: "Nudge the crossfader" },
+  { keys: "E D / I K", does: "Key up / down on deck A / B"}
 ];
 
 export function attachKeyboard(dispatch: (c: Command) => void, store: ControlStore, onFirstGesture: () => void): () => void {
@@ -25,6 +26,10 @@ export function attachKeyboard(dispatch: (c: Command) => void, store: ControlSto
       k === "o" ? { type: "cue", deck: "B" } :
       k === "s" ? { type: "sync", deck: "A" } :
       k === "l" ? { type: "sync", deck: "B" } :
+      k === "e" ? { type: "keyShift", deck: "A", semitones: 1 } :
+      k === "d" ? { type: "keyShift", deck: "A", semitones: -1 } :
+      k === "i" ? { type: "keyShift", deck: "B", semitones: 1 } :
+      k === "k" ? { type: "keyShift", deck: "B", semitones: -1 } :      
       loopKeys[k] ? { type: "loop", deck: loopKeys[k]![0], beats: loopKeys[k]![1] } : null;
     if (cmd) { onFirstGesture(); dispatch(cmd); e.preventDefault(); return; }
     if (k === "arrowleft" || k === "arrowright") {
