@@ -5,6 +5,10 @@ from the Claude Code session transcripts, typos included), what each one produce
 myself. Times are local (PDT). Very long pasted text that wasn't mine (tool instructions, the
 assignment's own wording) is left out.
 
+Prompts 1–3 are the exception to "my prompts": they were drafted outside Claude Code, during
+planning, and pasted in (the transcripts mark them as pasted). They're quoted exactly as sent and
+labelled. Every other prompt I typed myself.
+
 Original Claude chat session, from brainstorming to idea to roadmap: https://claude.ai/share/cb6ceeb7-23d6-4c41-bc0e-1bd0b33bdae2
 
 ---
@@ -25,6 +29,9 @@ Original Claude chat session, from brainstorming to idea to roadmap: https://cla
   sends it each pair's musical facts and gets back transition plans as structured JSON. I used the
   most capable model there, because the task is creative reasoning over a lot of structured musical
   data, and every reply must be valid against a strict schema.
+- **A Claude chat (claude.ai)** for brainstorming, turning the idea into a plan, and writing the
+  roadmap (linked above). The first structured spec prompts (1–3) were drafted outside Claude Code
+  during planning and pasted in.
 - **For questions and decisions,** like how human DJs handle key clashes, Vercel vs Render, or
   whether the music licences allow hosting, I asked Claude Code conversationally first and only let
   it build once I'd decided (Prompts 17, 28–31).
@@ -34,8 +41,9 @@ Original Claude chat session, from brainstorming to idea to roadmap: https://cla
 - **Plan first:** `ROADMAP.md` (architecture, contracts, chunks with "definition of done") and
   `AGENTS.md` (rules: one chunk at a time, contracts are the seams, done means tested, don't guess
   external APIs) came first, and every session works from them.
-- **Precise prompts for engineering:** for well-defined tasks I wrote detailed spec prompts with a
-  test plan and "don't commit, I'll review" (Prompts 1–3).
+- **Precise prompts for engineering:** the first well-defined tasks went in as detailed spec prompts
+  with a test plan and "don't commit, I'll review", drafted during planning and pasted (Prompts 1–3).
+  After that, I typed my prompts directly.
 - **Plain feedback for feel and sound:** for the hand controls and the music, I used it myself and
   described what felt or sounded wrong (Prompts 5–10, 17–22, 25, 27).
 - **Reviewing before committing:** I reviewed diffs, tried each change on the board, and committed
@@ -76,27 +84,9 @@ https://claude.ai/share/cb6ceeb7-23d6-4c41-bc0e-1bd0b33bdae2
 
 ### 2. Real tracks: Audius downloader and beat-grid calibration (Oct 3, evening)
 
-**Prompt 1** · Oct 3, 8:56 PM
+**Prompt 1** · Oct 3, 8:30 PM · *pasted: drafted outside Claude Code, not typed by me*
 
 ```text
-<pasted_content id="b054">
-Work on ROADMAP Chunk 1b. I've put real tracks in pipeline/tracks/.
-Run preprocess.py on them (no --stems yet) and give me a table per track:
-BPM, grid type, grid_residual_ratio, beatmatchable, downbeat_confidence,
-key, number of sections. Flag tracks that look suspicious and say why.
-Do NOT change any thresholds yet. Propose changes with evidence and wait
-for me. Start the dev server so I can spot-check phrase lines in the
-board myself.
-</pasted_content id="b054">
-```
-
-**Result:** `fetch_audius.py`, written from Audius's swagger spec. It downloads only tracks whose
-artists allow it, and records each track's licence and credit.
-
-**Prompt 2** · Oct 3, 8:30 PM
-
-```text
-<pasted_content id="cea3">
 Add pipeline/fetch_audius.py (part of Chunk 1). Read the current Audius
 API docs at docs.audius.org first; use the swagger.yaml, don't guess
 endpoints. It should:
@@ -108,13 +98,27 @@ endpoints. It should:
 - read an optional AUDIUS_API_KEY from the environment (never hardcode it)
 Test it against the live API with 3 real tracks, then run preprocess.py on
 them and show me the output table. Add the usage to the README.
-</pasted_content id="cea3">
+```
+
+**Result:** `fetch_audius.py`, written from Audius's swagger spec. It downloads only tracks whose
+artists allow it, and records each track's licence and credit.
+
+**Prompt 2** · Oct 3, 8:56 PM · *pasted: drafted outside Claude Code, not typed by me*
+
+```text
+Work on ROADMAP Chunk 1b. I've put real tracks in pipeline/tracks/.
+Run preprocess.py on them (no --stems yet) and give me a table per track:
+BPM, grid type, grid_residual_ratio, beatmatchable, downbeat_confidence,
+key, number of sections. Flag tracks that look suspicious and say why.
+Do NOT change any thresholds yet. Propose changes with evidence and wait
+for me. Start the dev server so I can spot-check phrase lines in the
+board myself.
 ```
 
 **Result:** a per-track table, which turned up three suspicious tracks (one mis-tracked tempo,
 one borderline, one odd sectioning). No thresholds were changed.
 
-**Prompt 3** · Oct 3, 9:12 PM · the main calibration task
+**Prompt 3** · Oct 3, 9:12 PM · the main calibration task · *pasted: drafted outside Claude Code, not typed by me*
 
 ```text
 Context: we're in ROADMAP Chunk 1b (calibrating the analysis pipeline on
