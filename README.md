@@ -4,8 +4,10 @@
 
 *Watch the demo on YouTube (click the image).*
 
-Link: https://handoff-web.onrender.com/
-Access Code: handoff-fall-2026
+**Try it live (hosted version):** https://handoff-web.onrender.com/<br>
+**Access code:** `handoff-fall-2026`
+
+The hosted version runs on a free server that sleeps when idle, so the first visit can take about a minute to start.
 
 ## What it does
 
