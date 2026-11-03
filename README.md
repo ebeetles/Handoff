@@ -1,5 +1,9 @@
 # Handoff
 
+[![Handoff demo video](https://img.youtube.com/vi/yLrhj1kEWtU/maxresdefault.jpg)](https://www.youtube.com/watch?v=yLrhj1kEWtU)
+
+*Watch the demo on YouTube (click the image).*
+
 Link: https://handoff-web.onrender.com/
 Access Code: handoff-fall-2026
 
